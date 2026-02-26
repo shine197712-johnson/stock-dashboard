@@ -1,6 +1,6 @@
 """
-逻辑指挥官 - 算力基建监控哨兵 v3.3
-使用东方财富接口，解决海外访问问题
+逻辑指挥官 - 算力基建监控哨兵 v3.4
+内置股票列表 + 手动输入，避免海外网络问题
 """
 
 import streamlit as st
@@ -37,119 +37,195 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ==================== 东方财富接口 ====================
-@st.cache_data(ttl=86400)
-def get_all_stocks():
-    """从东方财富获取全部A股列表"""
-    stocks = {}
+# ==================== 内置股票列表（300+常用股票）====================
+BUILTIN_STOCKS = {
+    # 算力/网络/通信
+    "301165": ("锐捷网络", "sz"), "000063": ("中兴通讯", "sz"), "600487": ("亨通光电", "sh"),
+    "002281": ("光迅科技", "sz"), "300502": ("新易盛", "sz"), "002396": ("星网锐捷", "sz"),
+    "603019": ("中科曙光", "sh"), "000977": ("浪潮信息", "sz"), "688256": ("寒武纪", "sh"),
     
-    try:
-        # 东方财富A股列表接口
-        url = "http://82.push2.eastmoney.com/api/qt/clist/get"
-        
-        # 沪深A股
-        for fs in ["m:0+t:6,7,13", "m:1+t:2,23"]:  # 深市、沪市
-            params = {
-                'pn': 1,
-                'pz': 5000,
-                'po': 1,
-                'np': 1,
-                'fltt': 2,
-                'invt': 2,
-                'fid': 'f3',
-                'fs': fs,
-                'fields': 'f12,f14'
-            }
-            
-            resp = requests.get(url, params=params, timeout=15)
-            data = resp.json()
-            
-            if data.get('data') and data['data'].get('diff'):
-                for item in data['data']['diff']:
-                    code = item.get('f12', '')
-                    name = item.get('f14', '')
-                    if code and name:
-                        # 判断市场
-                        if code.startswith('6'):
-                            market = 'sh'
-                        else:
-                            market = 'sz'
-                        stocks[code] = {'name': name, 'market': market}
-    except Exception as e:
-        st.error(f"获取股票列表失败: {e}")
+    # 新能源
+    "300750": ("宁德时代", "sz"), "002594": ("比亚迪", "sz"), "601012": ("隆基绿能", "sh"),
+    "300274": ("阳光电源", "sz"), "002459": ("晶澳科技", "sz"), "600438": ("通威股份", "sh"),
+    "002129": ("TCL中环", "sz"), "601865": ("福莱特", "sh"), "300763": ("锦浪科技", "sz"),
     
-    return stocks
+    # 半导体/芯片
+    "002371": ("北方华创", "sz"), "688981": ("中芯国际", "sh"), "603501": ("韦尔股份", "sh"),
+    "002049": ("紫光国微", "sz"), "603986": ("兆易创新", "sh"), "300782": ("卓胜微", "sz"),
+    "688012": ("中微公司", "sh"), "002185": ("华天科技", "sz"), "600584": ("长电科技", "sh"),
+    
+    # 消费/白酒
+    "600519": ("贵州茅台", "sh"), "000858": ("五粮液", "sz"), "000568": ("泸州老窖", "sz"),
+    "002304": ("洋河股份", "sz"), "600809": ("山西汾酒", "sh"), "000799": ("酒鬼酒", "sz"),
+    "603369": ("今世缘", "sh"), "000596": ("古井贡酒", "sz"), "600779": ("水井坊", "sh"),
+    
+    # 医药
+    "300760": ("迈瑞医疗", "sz"), "600276": ("恒瑞医药", "sh"), "000538": ("云南白药", "sz"),
+    "300122": ("智飞生物", "sz"), "002007": ("华兰生物", "sz"), "300347": ("泰格医药", "sz"),
+    "603259": ("药明康德", "sh"), "000661": ("长春高新", "sz"), "300015": ("爱尔眼科", "sz"),
+    
+    # 金融科技
+    "300059": ("东方财富", "sz"), "600588": ("用友网络", "sh"), "002230": ("科大讯飞", "sz"),
+    "688111": ("金山办公", "sh"), "300033": ("同花顺", "sz"), "002241": ("歌尔股份", "sz"),
+    
+    # 安防/智能制造
+    "002415": ("海康威视", "sz"), "002236": ("大华股份", "sz"), "300124": ("汇川技术", "sz"),
+    "601100": ("恒立液压", "sh"), "002008": ("大族激光", "sz"), "300285": ("国瓷材料", "sz"),
+    
+    # 互联网/平台
+    "002024": ("苏宁易购", "sz"), "300413": ("芒果超媒", "sz"), "002555": ("三七互娱", "sz"),
+    "002602": ("世纪华通", "sz"), "300418": ("昆仑万维", "sz"), "603444": ("吉比特", "sh"),
+    
+    # 汽车
+    "600104": ("上汽集团", "sh"), "000625": ("长安汽车", "sz"), "601238": ("广汽集团", "sh"),
+    "002920": ("德赛西威", "sz"), "603799": ("华友钴业", "sh"), "300450": ("先导智能", "sz"),
+    
+    # 银行/保险/券商
+    "601398": ("工商银行", "sh"), "601288": ("农业银行", "sh"), "601939": ("建设银行", "sh"),
+    "600036": ("招商银行", "sh"), "601318": ("中国平安", "sh"), "601628": ("中国人寿", "sh"),
+    "600030": ("中信证券", "sh"), "601688": ("华泰证券", "sh"), "600837": ("海通证券", "sh"),
+    
+    # 地产/建材
+    "000002": ("万科A", "sz"), "001979": ("招商蛇口", "sz"), "600048": ("保利发展", "sh"),
+    "600585": ("海螺水泥", "sh"), "002271": ("东方雨虹", "sz"), "603392": ("万泰生物", "sh"),
+    
+    # 军工
+    "600893": ("航发动力", "sh"), "000768": ("中航西飞", "sz"), "600760": ("中航沈飞", "sh"),
+    "002179": ("中航光电", "sz"), "600118": ("中国卫星", "sh"), "000687": ("华讯方舟", "sz"),
+    
+    # 电力/能源
+    "600900": ("长江电力", "sh"), "601985": ("中国核电", "sh"), "003816": ("中国广核", "sz"),
+    "600023": ("浙能电力", "sh"), "600886": ("国投电力", "sh"), "601991": ("大唐发电", "sh"),
+    
+    # 其他热门
+    "300499": ("高澜股份", "sz"), "600030": ("中信证券", "sh"), "601899": ("紫金矿业", "sh"),
+    "603288": ("海天味业", "sh"), "000333": ("美的集团", "sz"), "000651": ("格力电器", "sz"),
+    "600887": ("伊利股份", "sh"), "000895": ("双汇发展", "sz"), "600309": ("万华化学", "sh"),
+}
 
 
-def search_stocks(keyword, all_stocks):
-    """搜索股票"""
+def search_stocks(keyword):
+    """搜索内置股票"""
     if not keyword:
         return []
-    keyword_upper = keyword.upper()
+    keyword = keyword.upper()
     results = []
-    for code, info in all_stocks.items():
-        if keyword_upper in code or keyword in info['name']:
-            results.append({'code': code, 'name': info['name'], 'market': info['market']})
-    results.sort(key=lambda x: (keyword_upper not in x['code'], x['code']))
+    for code, (name, market) in BUILTIN_STOCKS.items():
+        if keyword in code or keyword in name:
+            results.append({'code': code, 'name': name, 'market': market})
+    results.sort(key=lambda x: (keyword not in x['code'], x['code']))
     return results[:15]
 
 
-def get_eastmoney_secid(code, market):
-    """生成东方财富的secid"""
-    if market == 'sh':
-        return f"1.{code}"
+def get_market_by_code(code):
+    """根据代码判断市场"""
+    if code.startswith('6'):
+        return 'sh'
+    elif code.startswith('0') or code.startswith('3'):
+        return 'sz'
     else:
-        return f"0.{code}"
+        return 'sz'
 
 
+# ==================== 数据获取（多源重试）====================
 def get_realtime_quote(stock_code, market="sz"):
-    """从东方财富获取实时行情"""
+    """获取实时行情 - 多数据源重试"""
+    
+    # 尝试方法1: 新浪财经
+    quote = get_quote_sina(stock_code, market)
+    if quote:
+        return quote
+    
+    # 尝试方法2: 腾讯财经
+    quote = get_quote_tencent(stock_code, market)
+    if quote:
+        return quote
+    
+    return None
+
+
+def get_quote_sina(stock_code, market):
+    """新浪财经接口"""
     try:
-        secid = get_eastmoney_secid(stock_code, market)
-        
-        url = "http://push2.eastmoney.com/api/qt/stock/get"
-        params = {
-            'secid': secid,
-            'fields': 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f168,f169,f170',
-            'ut': 'fa5fd1943c7b386f172d6893dbfba10b',
-            'invt': 2
+        sina_code = f"{market}{stock_code}"
+        url = f"https://hq.sinajs.cn/list={sina_code}"
+        headers = {
+            'Referer': 'https://finance.sina.com.cn',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        resp = requests.get(url, params=params, timeout=10)
-        data = resp.json()
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = 'gbk'
         
-        if not data.get('data'):
+        match = re.search(r'"(.+)"', response.text)
+        if not match:
             return None
         
-        d = data['data']
+        data = match.group(1).split(',')
+        if len(data) < 32 or not data[0]:
+            return None
         
-        # 解析字段
-        # f43:最新价(分) f44:最高(分) f45:最低(分) f46:今开(分) f47:成交量(手) f48:成交额(元)
-        # f50:量比 f51:涨停价 f52:跌停价 f55:收益 f57:代码 f58:名称 f60:昨收(分)
-        # f116:总市值 f117:流通市值 f168:换手率 f169:涨跌额(分) f170:涨跌幅
+        current_price = float(data[3]) if data[3] else 0
+        pre_close = float(data[2]) if data[2] else 0
         
-        current_price = d.get('f43', 0)
-        if isinstance(current_price, str) and current_price == '-':
-            current_price = 0
-        current_price = float(current_price) / 100 if current_price else 0
-        
-        pre_close = float(d.get('f60', 0)) / 100 if d.get('f60') else 0
-        high = float(d.get('f44', 0)) / 100 if d.get('f44') else 0
-        low = float(d.get('f45', 0)) / 100 if d.get('f45') else 0
-        open_price = float(d.get('f46', 0)) / 100 if d.get('f46') else 0
-        volume = float(d.get('f47', 0)) if d.get('f47') else 0  # 手
-        amount = float(d.get('f48', 0)) if d.get('f48') else 0  # 元
-        turnover = float(d.get('f168', 0)) if d.get('f168') else 0  # 换手率
-        change_pct = float(d.get('f170', 0)) / 100 if d.get('f170') else 0  # 涨跌幅
-        change_amount = float(d.get('f169', 0)) / 100 if d.get('f169') else 0  # 涨跌额
-        name = d.get('f58', '')
-        
-        # 非交易时段，当前价可能为0
         if current_price <= 0:
             current_price = pre_close
-        
         if current_price <= 0:
             return None
+        
+        change_amount = current_price - pre_close
+        change_pct = (change_amount / pre_close * 100) if pre_close > 0 else 0
+        
+        return {
+            'name': data[0],
+            'code': stock_code,
+            'price': current_price,
+            'change_pct': round(change_pct, 2),
+            'change_amount': round(change_amount, 2),
+            'volume': float(data[8]) / 100 if data[8] else 0,
+            'amount': float(data[9]) if data[9] else 0,
+            'turnover_rate': 0,
+            'high': float(data[4]) if data[4] else current_price,
+            'low': float(data[5]) if data[5] else current_price,
+            'open': float(data[1]) if data[1] else current_price,
+            'pre_close': pre_close,
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'source': '新浪'
+        }
+    except:
+        return None
+
+
+def get_quote_tencent(stock_code, market):
+    """腾讯财经接口"""
+    try:
+        tc_code = f"{market}{stock_code}"
+        url = f"https://qt.gtimg.cn/q={tc_code}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = 'gbk'
+        
+        if '="' not in response.text:
+            return None
+        
+        data_str = response.text.split('="')[1].rstrip('";')
+        parts = data_str.split('~')
+        
+        if len(parts) < 40:
+            return None
+        
+        name = parts[1]
+        current_price = float(parts[3]) if parts[3] else 0
+        pre_close = float(parts[4]) if parts[4] else 0
+        
+        if current_price <= 0:
+            current_price = pre_close
+        if current_price <= 0:
+            return None
+        
+        change_amount = current_price - pre_close
+        change_pct = (change_amount / pre_close * 100) if pre_close > 0 else 0
         
         return {
             'name': name,
@@ -157,60 +233,44 @@ def get_realtime_quote(stock_code, market="sz"):
             'price': current_price,
             'change_pct': round(change_pct, 2),
             'change_amount': round(change_amount, 2),
-            'volume': volume,
-            'amount': amount,
-            'turnover_rate': turnover,
-            'high': high if high > 0 else current_price,
-            'low': low if low > 0 else current_price,
-            'open': open_price if open_price > 0 else current_price,
+            'volume': float(parts[6]) if parts[6] else 0,
+            'amount': float(parts[37]) * 10000 if len(parts) > 37 and parts[37] else 0,
+            'turnover_rate': float(parts[38]) if len(parts) > 38 and parts[38] else 0,
+            'high': float(parts[33]) if len(parts) > 33 and parts[33] else current_price,
+            'low': float(parts[34]) if len(parts) > 34 and parts[34] else current_price,
+            'open': float(parts[5]) if parts[5] else current_price,
             'pre_close': pre_close,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'source': '腾讯'
         }
-    except Exception as e:
+    except:
         return None
 
 
 def get_historical_data(stock_code, market="sz", days=90):
-    """从东方财富获取历史K线"""
+    """获取历史K线 - 新浪接口"""
     try:
-        secid = get_eastmoney_secid(stock_code, market)
+        sina_code = f"{market}{stock_code}"
+        url = "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_data/KC_MarketDataService.getKLineData"
+        params = {'symbol': sina_code, 'scale': '240', 'ma': 'no', 'datalen': days}
+        headers = {'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
         
-        url = "http://push2his.eastmoney.com/api/qt/stock/kline/get"
-        params = {
-            'secid': secid,
-            'fields1': 'f1,f2,f3,f4,f5,f6',
-            'fields2': 'f51,f52,f53,f54,f55,f56,f57',
-            'klt': 101,  # 日K
-            'fqt': 1,    # 前复权
-            'end': '20500101',
-            'lmt': days,
-            'ut': 'fa5fd1943c7b386f172d6893dbfba10b'
-        }
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        match = re.search(r'\((\[.+\])\)', response.text)
         
-        resp = requests.get(url, params=params, timeout=10)
-        data = resp.json()
-        
-        if not data.get('data') or not data['data'].get('klines'):
+        if not match:
             return None
         
-        klines = data['data']['klines']
-        records = []
+        data = json.loads(match.group(1))
+        if not data:
+            return None
         
-        for line in klines:
-            parts = line.split(',')
-            if len(parts) >= 7:
-                records.append({
-                    '日期': parts[0],
-                    '开盘': float(parts[1]),
-                    '收盘': float(parts[2]),
-                    '最高': float(parts[3]),
-                    '最低': float(parts[4]),
-                    '成交量': float(parts[5]),
-                    '成交额': float(parts[6])
-                })
-        
-        df = pd.DataFrame(records)
-        df['日期'] = pd.to_datetime(df['日期'])
+        df = pd.DataFrame(data)
+        df['day'] = pd.to_datetime(df['day'])
+        df = df.rename(columns={'day': '日期', 'open': '开盘', 'high': '最高', 
+                                'low': '最低', 'close': '收盘', 'volume': '成交量'})
+        for col in ['开盘', '最高', '最低', '收盘', '成交量']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
     except:
         return None
@@ -236,7 +296,8 @@ def check_alerts(quote, config):
     if not quote or quote.get('price', 0) <= 0:
         return alerts
     
-    name, price, volume, amount = quote['name'], quote['price'], quote['volume'], quote['amount']
+    name, price = quote['name'], quote['price']
+    volume, amount = quote['volume'], quote['amount']
     turnover, change_pct = quote.get('turnover_rate', 0), quote['change_pct']
     
     if config.get('price_alert_enabled'):
@@ -247,24 +308,24 @@ def check_alerts(quote, config):
     
     if config.get('change_alert_enabled'):
         if change_pct <= config.get('change_min', -10):
-            alerts.append({'level': 'error', 'message': f"📉 {name} 跌幅 {change_pct:.2f}% 超阈值"})
+            alerts.append({'level': 'error', 'message': f"📉 {name} 跌幅 {change_pct:.2f}%"})
         if change_pct >= config.get('change_max', 10):
-            alerts.append({'level': 'success', 'message': f"📈 {name} 涨幅 {change_pct:.2f}% 超阈值"})
+            alerts.append({'level': 'success', 'message': f"📈 {name} 涨幅 {change_pct:.2f}%"})
     
     if config.get('volume_alert_enabled'):
         th = config.get('volume_threshold', 0) * 10000
         if th > 0 and volume >= th:
-            alerts.append({'level': 'warning', 'message': f"📊 {name} 成交量 {volume/10000:.2f}万手 超阈值"})
+            alerts.append({'level': 'warning', 'message': f"📊 {name} 成交量 {volume/10000:.2f}万手"})
     
     if config.get('amount_alert_enabled'):
         th = config.get('amount_threshold', 0) * 100000000
         if th > 0 and amount >= th:
-            alerts.append({'level': 'warning', 'message': f"💰 {name} 成交额 {amount/100000000:.2f}亿 超阈值"})
+            alerts.append({'level': 'warning', 'message': f"💰 {name} 成交额 {amount/100000000:.2f}亿"})
     
     if config.get('turnover_alert_enabled'):
         th = config.get('turnover_threshold', 0)
         if th > 0 and turnover >= th:
-            alerts.append({'level': 'warning', 'message': f"🔄 {name} 换手率 {turnover:.2f}% 超阈值"})
+            alerts.append({'level': 'warning', 'message': f"🔄 {name} 换手率 {turnover:.2f}%"})
     
     return alerts
 
@@ -312,41 +373,26 @@ def main():
     if 'pushplus_token' not in st.session_state:
         st.session_state.pushplus_token = ""
     
-    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 v3.3</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 v3.4</h1>', unsafe_allow_html=True)
     
     now = datetime.now()
     hour, minute, weekday = now.hour, now.minute, now.weekday()
-    
-    # 判断交易时段（北京时间）
-    is_trading = weekday < 5 and (
-        (hour == 9 and minute >= 30) or 
-        (hour == 10) or 
-        (hour == 11 and minute <= 30) or
-        (hour >= 13 and hour < 15)
-    )
+    is_trading = weekday < 5 and ((hour == 9 and minute >= 30) or (hour == 10) or 
+                                   (hour == 11 and minute <= 30) or (13 <= hour < 15))
     
     if not is_trading:
         st.info("💤 当前为非交易时段，显示最新收盘数据")
-    
-    with st.spinner("加载A股列表..."):
-        all_stocks = get_all_stocks()
-    
-    if not all_stocks:
-        st.error("⚠️ 无法加载股票列表，请稍后刷新")
-        if st.button("🔄 重新加载"):
-            st.cache_data.clear()
-            st.rerun()
-        return
     
     # 侧边栏
     with st.sidebar:
         st.header("⚙️ 配置")
         
+        # 搜索内置股票
         st.subheader("🔍 搜索股票")
         keyword = st.text_input("代码或名称", placeholder="300499 或 高澜")
         
         if keyword:
-            results = search_stocks(keyword, all_stocks)
+            results = search_stocks(keyword)
             if results:
                 for r in results:
                     col1, col2 = st.columns([3, 1])
@@ -355,8 +401,31 @@ def main():
                         st.session_state.monitored_stocks[r['code']] = {'name': r['name'], 'market': r['market']}
                         st.rerun()
             else:
-                st.warning("未找到")
+                st.caption("内置列表未找到，可手动输入添加👇")
         
+        # 手动输入任意代码
+        st.markdown("---")
+        st.subheader("✏️ 手动添加")
+        col_c, col_m = st.columns([2, 1])
+        manual_code = col_c.text_input("股票代码", placeholder="300499", max_chars=6, label_visibility="collapsed")
+        manual_market = col_m.selectbox("市场", ["sz", "sh"], label_visibility="collapsed")
+        
+        if st.button("➕ 添加此股票", use_container_width=True):
+            if manual_code and len(manual_code) == 6:
+                # 自动判断市场
+                market = get_market_by_code(manual_code) if manual_market == "auto" else manual_market
+                # 尝试获取股票名称
+                quote = get_realtime_quote(manual_code, market)
+                if quote:
+                    st.session_state.monitored_stocks[manual_code] = {'name': quote['name'], 'market': market}
+                    st.success(f"✅ 已添加 {quote['name']}")
+                    st.rerun()
+                else:
+                    st.error("❌ 获取失败，请检查代码或稍后重试")
+            else:
+                st.warning("请输入6位股票代码")
+        
+        # 监控列表
         st.markdown("---")
         st.subheader(f"📌 监控列表 ({len(st.session_state.monitored_stocks)})")
         
@@ -368,23 +437,29 @@ def main():
                 st.rerun()
         
         if not st.session_state.monitored_stocks:
-            if st.button("➕ 添加示例股票"):
+            if st.button("➕ 添加示例股票", use_container_width=True):
                 st.session_state.monitored_stocks['301165'] = {'name': '锐捷网络', 'market': 'sz'}
                 st.session_state.monitored_stocks['300499'] = {'name': '高澜股份', 'market': 'sz'}
                 st.session_state.monitored_stocks['600487'] = {'name': '亨通光电', 'market': 'sh'}
                 st.rerun()
         
+        # 热门股票
         with st.expander("🔥 热门股票"):
             hots = [("301165", "锐捷网络", "sz"), ("300499", "高澜股份", "sz"),
                    ("600487", "亨通光电", "sh"), ("002415", "海康威视", "sz"),
                    ("300750", "宁德时代", "sz"), ("002594", "比亚迪", "sz"),
-                   ("600519", "贵州茅台", "sh"), ("000063", "中兴通讯", "sz")]
-            for code, name, market in hots:
+                   ("600519", "贵州茅台", "sh"), ("000063", ("中兴通讯", "sz"))]
+            for item in hots:
+                if len(item) == 3:
+                    code, name, market = item
+                else:
+                    continue
                 if code not in st.session_state.monitored_stocks:
                     if st.button(f"{name}", key=f"hot_{code}", use_container_width=True):
                         st.session_state.monitored_stocks[code] = {'name': name, 'market': market}
                         st.rerun()
         
+        # 微信推送
         st.markdown("---")
         st.subheader("📱 微信推送")
         token = st.text_input("PushPlus Token", value=st.session_state.pushplus_token, type="password")
@@ -398,18 +473,19 @@ def main():
         enable_push = col_b.checkbox("启用", value=True)
         
         st.markdown("---")
-        col_r1, col_r2 = st.columns(2)
-        if col_r1.button("🔄 刷新", use_container_width=True):
+        if st.button("🔄 刷新数据", use_container_width=True):
             st.rerun()
-        if col_r2.button("🗑️ 清缓存", use_container_width=True):
-            st.cache_data.clear()
-            st.rerun()
-        
-        st.caption(f"⏰ {now.strftime('%H:%M:%S')} | 共{len(all_stocks)}只")
+        st.caption(f"⏰ {now.strftime('%H:%M:%S')} | 内置{len(BUILTIN_STOCKS)}只股票")
     
     # 主内容
     if not st.session_state.monitored_stocks:
-        st.info("👈 搜索添加股票开始监控")
+        st.info("👈 搜索或手动输入股票代码添加监控")
+        st.markdown("""
+        ### 💡 使用说明
+        1. **搜索添加**: 在左侧搜索框输入股票代码或名称
+        2. **手动添加**: 输入6位股票代码，选择市场(sz深圳/sh上海)
+        3. **快速添加**: 点击「热门股票」快速添加
+        """)
         return
     
     all_alerts = []
@@ -503,8 +579,7 @@ def main():
                 cols2[2].metric("⬇️ 最低", f"¥{quote['low']:.2f}")
                 cols2[3].metric("📊 昨收", f"¥{quote['pre_close']:.2f}")
             else:
-                st.warning(f"⏳ {name} ({code}) 数据获取失败")
-                st.caption("可能原因: 停牌、退市或网络问题，请点击左侧「清缓存」后重试")
+                st.warning(f"⏳ {name} ({code}) 数据获取失败，请稍后刷新")
             
             # 图表
             if hist is not None and not hist.empty:
@@ -512,8 +587,6 @@ def main():
                 pmax = cfg['price_max'] if cfg['price_alert_enabled'] else None
                 cur = quote['price'] if quote else None
                 st.plotly_chart(create_chart(hist, name, code, pmin, pmax, cur), use_container_width=True)
-            else:
-                st.info("📊 暂无历史K线数据")
     
     # 推送
     if all_alerts and token and enable_push:
@@ -525,7 +598,7 @@ def main():
             st.session_state.alert_history = st.session_state.alert_history[-50:]
     
     st.markdown("---")
-    st.caption("📌 数据来源: 东方财富 | 🛡️ 逻辑指挥官 v3.3")
+    st.caption("📌 数据来源: 新浪/腾讯财经 | 🛡️ 逻辑指挥官 v3.4")
     
     time.sleep(60)
     st.rerun()
