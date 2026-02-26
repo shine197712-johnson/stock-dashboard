@@ -1,1 +1,4 @@
-[README.md](https://github.com/user-attachments/files/25540756/README.md)
+streamlit>=1.28.0
+plotly>=5.18.0
+pandas>=2.0.0
+requests>=2.28.0
