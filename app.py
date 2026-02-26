@@ -1,6 +1,6 @@
 """
-逻辑指挥官 - 算力基建监控哨兵 v3.0 专业版
-支持多股票监控、多维度报警、消息推送
+逻辑指挥官 - 算力基建监控哨兵 v3.1
+支持全A股搜索、完整报警配置、微信推送
 """
 
 import streamlit as st
@@ -34,38 +34,83 @@ st.markdown("""
         text-align: center;
         padding: 1rem 0;
     }
-    .stock-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        margin-bottom: 1rem;
-    }
-    .alert-triggered {
-        animation: pulse 1s infinite;
-    }
-    @keyframes pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== 预设股票列表 ====================
-STOCK_PRESETS = {
-    "301165": {"name": "锐捷网络", "market": "sz", "sector": "网络设备"},
-    "000063": {"name": "中兴通讯", "market": "sz", "sector": "通信设备"},
-    "600588": {"name": "用友网络", "market": "sh", "sector": "软件服务"},
-    "002415": {"name": "海康威视", "market": "sz", "sector": "安防设备"},
-    "300059": {"name": "东方财富", "market": "sz", "sector": "金融科技"},
-    "600519": {"name": "贵州茅台", "market": "sh", "sector": "白酒"},
-    "300750": {"name": "宁德时代", "market": "sz", "sector": "新能源"},
-    "002594": {"name": "比亚迪", "market": "sz", "sector": "新能源汽车"},
-}
+
+# ==================== 全A股列表获取 ====================
+@st.cache_data(ttl=86400)
+def get_all_stocks():
+    """获取全部A股列表"""
+    try:
+        stocks = {}
+        headers = {
+            'Referer': 'http://finance.sina.com.cn',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+        
+        # 沪市
+        for page in range(1, 60):
+            params = {'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'sh_a', 'symbol': ''}
+            try:
+                resp = requests.get(url, params=params, headers=headers, timeout=10)
+                data = resp.json()
+                if not data:
+                    break
+                for item in data:
+                    code = item.get('symbol', '')
+                    name = item.get('name', '')
+                    if code and name:
+                        stocks[code] = {'name': name, 'market': 'sh', 'code': code}
+            except:
+                break
+        
+        # 深市
+        for page in range(1, 100):
+            params = {'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'sz_a', 'symbol': ''}
+            try:
+                resp = requests.get(url, params=params, headers=headers, timeout=10)
+                data = resp.json()
+                if not data:
+                    break
+                for item in data:
+                    code = item.get('symbol', '')
+                    name = item.get('name', '')
+                    if code and name:
+                        stocks[code] = {'name': name, 'market': 'sz', 'code': code}
+            except:
+                break
+        
+        return stocks
+    except:
+        return {}
 
 
-# ==================== 数据获取函数 ====================
+def search_stocks(keyword, all_stocks):
+    """搜索股票"""
+    if not keyword or len(keyword) < 1:
+        return []
+    
+    keyword_upper = keyword.upper()
+    results = []
+    
+    for code, info in all_stocks.items():
+        name = info['name']
+        if keyword_upper in code or keyword in name:
+            results.append({
+                'code': code,
+                'name': name,
+                'market': info['market'],
+                'display': f"{name} ({code})"
+            })
+    
+    results.sort(key=lambda x: (keyword_upper not in x['code'], x['code']))
+    return results[:15]
+
+
+# ==================== 数据获取 ====================
 def get_realtime_quote(stock_code, market="sz"):
     """获取实时行情"""
     try:
@@ -73,19 +118,16 @@ def get_realtime_quote(stock_code, market="sz"):
         url = f"http://hq.sinajs.cn/list={sina_code}"
         headers = {
             'Referer': 'http://finance.sina.com.cn',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0'
         }
         response = requests.get(url, headers=headers, timeout=10)
         response.encoding = 'gbk'
         
-        content = response.text
-        match = re.search(r'"(.+)"', content)
-        
+        match = re.search(r'"(.+)"', response.text)
         if not match:
             return None
         
         data = match.group(1).split(',')
-        
         if len(data) < 32 or data[0] == '':
             return None
         
@@ -100,6 +142,9 @@ def get_realtime_quote(stock_code, market="sz"):
         volume = float(data[8]) if data[8] else 0
         amount = float(data[9]) if data[9] else 0
         
+        # 获取换手率
+        turnover_rate = get_turnover_rate(stock_code, market)
+        
         return {
             'name': data[0],
             'code': stock_code,
@@ -108,35 +153,42 @@ def get_realtime_quote(stock_code, market="sz"):
             'change_amount': round(change_amount, 2),
             'volume': volume / 100,
             'amount': amount,
+            'turnover_rate': turnover_rate,
             'high': float(data[4]) if data[4] else 0,
             'low': float(data[5]) if data[5] else 0,
             'open': float(data[1]) if data[1] else 0,
             'pre_close': pre_close,
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
-    except Exception as e:
+    except:
         return None
 
 
+def get_turnover_rate(stock_code, market):
+    """获取换手率"""
+    try:
+        sina_code = f"{market}{stock_code}"
+        url = f"http://qt.gtimg.cn/q={sina_code}"
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        resp.encoding = 'gbk'
+        parts = resp.text.split('~')
+        if len(parts) > 38 and parts[38]:
+            return float(parts[38])
+        return 0
+    except:
+        return 0
+
+
 def get_historical_data(stock_code, market="sz", days=90):
-    """获取历史K线数据"""
+    """获取历史数据"""
     try:
         sina_code = f"{market}{stock_code}"
         url = f"https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_data/KC_MarketDataService.getKLineData"
-        params = {
-            'symbol': sina_code,
-            'scale': '240',
-            'ma': 'no',
-            'datalen': days
-        }
-        headers = {
-            'Referer': 'https://finance.sina.com.cn',
-            'User-Agent': 'Mozilla/5.0'
-        }
+        params = {'symbol': sina_code, 'scale': '240', 'ma': 'no', 'datalen': days}
+        headers = {'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
         
         response = requests.get(url, params=params, headers=headers, timeout=10)
-        content = response.text
-        match = re.search(r'\((\[.+\])\)', content)
+        match = re.search(r'\((\[.+\])\)', response.text)
         
         if not match:
             return None
@@ -147,10 +199,7 @@ def get_historical_data(stock_code, market="sz", days=90):
         
         df = pd.DataFrame(data)
         df['day'] = pd.to_datetime(df['day'])
-        df = df.rename(columns={
-            'day': '日期', 'open': '开盘', 'high': '最高',
-            'low': '最低', 'close': '收盘', 'volume': '成交量'
-        })
+        df = df.rename(columns={'day': '日期', 'open': '开盘', 'high': '最高', 'low': '最低', 'close': '收盘', 'volume': '成交量'})
         
         for col in ['开盘', '最高', '最低', '收盘', '成交量']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -160,452 +209,313 @@ def get_historical_data(stock_code, market="sz", days=90):
         return None
 
 
-def get_stock_news(stock_code, stock_name):
-    """获取股票相关新闻 - 使用百度新闻搜索"""
-    try:
-        # 使用新浪财经股票新闻接口
-        url = "https://feed.mix.sina.com.cn/api/roll/get"
-        params = {
-            'pageid': '155',
-            'lid': '2516',
-            'num': 5,
-            'page': 1
-        }
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': 'https://finance.sina.com.cn'
-        }
-        
-        response = requests.get(url, params=params, headers=headers, timeout=5)
-        data = response.json()
-        
-        news_list = []
-        if data.get('result', {}).get('data'):
-            for item in data['result']['data'][:5]:
-                title = item.get('title', '')
-                # 过滤包含股票名称的新闻
-                if stock_name in title or stock_code in title or '算力' in title or '网络' in title:
-                    news_list.append({
-                        'title': title,
-                        'time': item.get('ctime', ''),
-                        'url': item.get('url', '#')
-                    })
-        
-        # 如果没有找到相关新闻，返回通用财经新闻
-        if not news_list and data.get('result', {}).get('data'):
-            for item in data['result']['data'][:3]:
-                news_list.append({
-                    'title': item.get('title', ''),
-                    'time': item.get('ctime', ''),
-                    'url': item.get('url', '#')
-                })
-        
-        return news_list
-    except:
-        return []
-
-
-# ==================== 消息推送函数 ====================
+# ==================== 推送 ====================
 def send_pushplus(token, title, content):
-    """通过 PushPlus 发送微信推送"""
+    """微信推送"""
     if not token:
-        return False, "未配置 PushPlus Token"
-    
+        return False, "未配置Token"
     try:
         url = "http://www.pushplus.plus/send"
-        data = {
-            "token": token,
-            "title": title,
-            "content": content,
-            "template": "html"
-        }
+        data = {"token": token, "title": title, "content": content, "template": "html"}
         response = requests.post(url, json=data, timeout=10)
         result = response.json()
-        
         if result.get('code') == 200:
-            return True, "推送成功"
-        else:
-            return False, result.get('msg', '推送失败')
+            return True, "成功"
+        return False, result.get('msg', '失败')
     except Exception as e:
         return False, str(e)
 
 
-def check_alerts_multi(quote, config):
-    """多维度报警检查"""
+# ==================== 报警检查 ====================
+def check_alerts(quote, config):
+    """多维度报警"""
     alerts = []
-    
     if not quote or quote.get('price', 0) <= 0:
         return alerts
     
+    name = quote['name']
     price = quote['price']
     volume = quote['volume']
+    amount = quote['amount']
+    turnover = quote.get('turnover_rate', 0)
     change_pct = quote['change_pct']
     
-    # 价格报警
-    if config.get('price_alert_enabled', False):
-        support = config.get('support_line', 0)
-        resistance = config.get('resistance_line', 0)
-        
-        if support > 0 and price <= support:
-            alerts.append({
-                'type': 'price_support',
-                'level': 'error',
-                'message': f"⚠️ {quote['name']} 股价 ¥{price:.2f} 跌破支撑位 ¥{support:.2f}"
-            })
-        
-        if resistance > 0 and price >= resistance:
-            alerts.append({
-                'type': 'price_resistance',
-                'level': 'success',
-                'message': f"🎉 {quote['name']} 股价 ¥{price:.2f} 突破压力位 ¥{resistance:.2f}"
-            })
+    # 价格
+    if config.get('price_alert_enabled'):
+        if config.get('price_min', 0) > 0 and price <= config['price_min']:
+            alerts.append({'level': 'error', 'message': f"⚠️ {name} 股价 ¥{price:.2f} 跌破下限 ¥{config['price_min']:.2f}"})
+        if config.get('price_max', 0) > 0 and price >= config['price_max']:
+            alerts.append({'level': 'success', 'message': f"🎉 {name} 股价 ¥{price:.2f} 突破上限 ¥{config['price_max']:.2f}"})
     
-    # 涨跌幅报警
-    if config.get('change_alert_enabled', False):
-        change_threshold = config.get('change_threshold', 5)
-        
-        if abs(change_pct) >= change_threshold:
-            if change_pct > 0:
-                alerts.append({
-                    'type': 'change_up',
-                    'level': 'success',
-                    'message': f"📈 {quote['name']} 涨幅达 {change_pct:.2f}%，超过阈值 {change_threshold}%"
-                })
-            else:
-                alerts.append({
-                    'type': 'change_down',
-                    'level': 'error',
-                    'message': f"📉 {quote['name']} 跌幅达 {change_pct:.2f}%，超过阈值 {change_threshold}%"
-                })
+    # 涨跌幅
+    if config.get('change_alert_enabled'):
+        if change_pct <= config.get('change_min', -10):
+            alerts.append({'level': 'error', 'message': f"📉 {name} 跌幅 {change_pct:.2f}% 超过阈值 {config['change_min']}%"})
+        if change_pct >= config.get('change_max', 10):
+            alerts.append({'level': 'success', 'message': f"📈 {name} 涨幅 {change_pct:.2f}% 超过阈值 {config['change_max']}%"})
     
-    # 成交量报警
-    if config.get('volume_alert_enabled', False):
-        volume_threshold = config.get('volume_threshold', 10000)
-        
-        if volume >= volume_threshold:
-            alerts.append({
-                'type': 'volume',
-                'level': 'warning',
-                'message': f"📊 {quote['name']} 成交量 {volume/10000:.2f}万手，超过阈值 {volume_threshold/10000:.2f}万手"
-            })
+    # 成交量
+    if config.get('volume_alert_enabled'):
+        threshold = config.get('volume_threshold', 0) * 10000
+        if threshold > 0 and volume >= threshold:
+            alerts.append({'level': 'warning', 'message': f"📊 {name} 成交量 {volume/10000:.2f}万手 超阈值"})
+    
+    # 成交额
+    if config.get('amount_alert_enabled'):
+        threshold = config.get('amount_threshold', 0) * 100000000
+        if threshold > 0 and amount >= threshold:
+            alerts.append({'level': 'warning', 'message': f"💰 {name} 成交额 {amount/100000000:.2f}亿 超阈值"})
+    
+    # 换手率
+    if config.get('turnover_alert_enabled'):
+        threshold = config.get('turnover_threshold', 0)
+        if threshold > 0 and turnover >= threshold:
+            alerts.append({'level': 'warning', 'message': f"🔄 {name} 换手率 {turnover:.2f}% 超阈值 {threshold}%"})
     
     return alerts
 
 
-# ==================== 图表函数 ====================
-def create_stock_chart(df, stock_name, stock_code, support=None, resistance=None, current_price=None):
-    """创建股票走势图"""
-    fig = make_subplots(
-        rows=2, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.1,
-        row_heights=[0.7, 0.3],
-        subplot_titles=[f'{stock_name} ({stock_code}) 价格走势', '成交量']
-    )
+# ==================== 图表 ====================
+def create_chart(df, name, code, price_min=None, price_max=None, current=None):
+    """创建图表"""
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, row_heights=[0.7, 0.3])
     
-    # 价格线
-    fig.add_trace(go.Scatter(
-        x=df['日期'], y=df['收盘'],
-        mode='lines', name='收盘价',
-        line=dict(color='#667eea', width=2),
-        fill='tozeroy', fillcolor='rgba(102, 126, 234, 0.1)'
-    ), row=1, col=1)
+    fig.add_trace(go.Scatter(x=df['日期'], y=df['收盘'], mode='lines', name='收盘价',
+                            line=dict(color='#667eea', width=2), fill='tozeroy',
+                            fillcolor='rgba(102,126,234,0.1)'), row=1, col=1)
     
-    # 支撑位
-    if support and support > 0:
-        fig.add_hline(y=support, line_dash="dash", line_color="green",
-                     annotation_text=f"支撑: ¥{support:.2f}", row=1, col=1)
+    if price_min and price_min > 0:
+        fig.add_hline(y=price_min, line_dash="dash", line_color="green",
+                     annotation_text=f"下限: ¥{price_min:.2f}", row=1, col=1)
+    if price_max and price_max > 0:
+        fig.add_hline(y=price_max, line_dash="dash", line_color="red",
+                     annotation_text=f"上限: ¥{price_max:.2f}", row=1, col=1)
+    if current and current > 0:
+        fig.add_hline(y=current, line_dash="dot", line_color="orange",
+                     annotation_text=f"现价: ¥{current:.2f}", row=1, col=1)
     
-    # 压力位
-    if resistance and resistance > 0:
-        fig.add_hline(y=resistance, line_dash="dash", line_color="red",
-                     annotation_text=f"压力: ¥{resistance:.2f}", row=1, col=1)
+    colors = ['red' if r['收盘'] >= r['开盘'] else 'green' for _, r in df.iterrows()]
+    fig.add_trace(go.Bar(x=df['日期'], y=df['成交量'], marker_color=colors), row=2, col=1)
     
-    # 当前价
-    if current_price and current_price > 0:
-        fig.add_hline(y=current_price, line_dash="dot", line_color="orange",
-                     annotation_text=f"现价: ¥{current_price:.2f}", row=1, col=1)
-    
-    # 成交量
-    colors = ['red' if row['收盘'] >= row['开盘'] else 'green' for _, row in df.iterrows()]
-    fig.add_trace(go.Bar(x=df['日期'], y=df['成交量'], marker_color=colors, name='成交量'), row=2, col=1)
-    
-    fig.update_layout(height=500, template='plotly_white', showlegend=False)
+    fig.update_layout(height=450, template='plotly_white', showlegend=False,
+                     title=f'{name} ({code}) 走势')
     return fig
 
 
-# ==================== 辅助函数 ====================
-def format_volume(vol):
-    if vol >= 10000:
-        return f"{vol/10000:.2f}万手"
-    return f"{vol:.0f}手"
+def format_volume(v):
+    return f"{v/10000:.2f}万手" if v >= 10000 else f"{v:.0f}手"
 
-
-def format_amount(amt):
-    if amt >= 100000000:
-        return f"{amt/100000000:.2f}亿"
-    elif amt >= 10000:
-        return f"{amt/10000:.2f}万"
-    return f"{amt:.2f}"
+def format_amount(a):
+    if a >= 100000000:
+        return f"{a/100000000:.2f}亿"
+    elif a >= 10000:
+        return f"{a/10000:.2f}万"
+    return f"{a:.2f}"
 
 
 # ==================== 主程序 ====================
 def main():
-    # 初始化 session state
+    # 初始化
     if 'monitored_stocks' not in st.session_state:
-        st.session_state.monitored_stocks = ['301165']
-    
+        st.session_state.monitored_stocks = {}
     if 'stock_configs' not in st.session_state:
         st.session_state.stock_configs = {}
-    
     if 'alert_history' not in st.session_state:
         st.session_state.alert_history = []
-    
     if 'pushplus_token' not in st.session_state:
         st.session_state.pushplus_token = ""
     
-    # 页面标题
-    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 - 算力基建监控哨兵 v3.0</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 v3.1</h1>', unsafe_allow_html=True)
     
-    # ==================== 侧边栏 ====================
+    # 加载股票列表
+    with st.spinner("加载A股列表..."):
+        all_stocks = get_all_stocks()
+    
+    # ===== 侧边栏 =====
     with st.sidebar:
-        st.header("⚙️ 监控配置")
+        st.header("⚙️ 配置")
         
-        # 股票选择
-        st.subheader("📌 选择监控股票")
+        # 搜索
+        st.subheader("🔍 搜索股票")
+        keyword = st.text_input("代码或名称", placeholder="301165 或 锐捷")
         
-        available_stocks = list(STOCK_PRESETS.keys())
+        if keyword:
+            results = search_stocks(keyword, all_stocks)
+            if results:
+                for r in results:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.caption(f"{r['name']} ({r['code']})")
+                    with col2:
+                        if st.button("➕", key=f"add_{r['code']}"):
+                            st.session_state.monitored_stocks[r['code']] = {'name': r['name'], 'market': r['market']}
+                            st.rerun()
+            else:
+                st.warning("未找到")
         
-        selected_stocks = st.multiselect(
-            "从预设列表选择",
-            options=available_stocks,
-            default=st.session_state.monitored_stocks,
-            format_func=lambda x: f"{STOCK_PRESETS[x]['name']} ({x})"
-        )
-        
-        # 自定义股票
+        # 已监控
         st.markdown("---")
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            custom_code = st.text_input("自定义代码", placeholder="600000")
-        with col2:
-            custom_market = st.selectbox("市场", ["sz", "sh"])
+        st.subheader(f"📌 监控列表 ({len(st.session_state.monitored_stocks)})")
         
-        if st.button("➕ 添加", use_container_width=True):
-            if custom_code and len(custom_code) == 6:
-                if custom_code not in STOCK_PRESETS:
-                    STOCK_PRESETS[custom_code] = {
-                        "name": f"自定义{custom_code}",
-                        "market": custom_market,
-                        "sector": "自定义"
-                    }
-                if custom_code not in selected_stocks:
-                    selected_stocks.append(custom_code)
-                st.success(f"已添加 {custom_code}")
+        for code, info in list(st.session_state.monitored_stocks.items()):
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption(f"{info['name']} ({code})")
+            with col2:
+                if st.button("❌", key=f"del_{code}"):
+                    del st.session_state.monitored_stocks[code]
+                    st.rerun()
+        
+        if not st.session_state.monitored_stocks:
+            if st.button("➕ 添加锐捷网络示例"):
+                st.session_state.monitored_stocks['301165'] = {'name': '锐捷网络', 'market': 'sz'}
                 st.rerun()
         
-        st.session_state.monitored_stocks = selected_stocks if selected_stocks else ['301165']
+        # 热门
+        with st.expander("🔥 热门股票"):
+            hots = [("301165", "锐捷网络", "sz"), ("000063", "中兴通讯", "sz"),
+                   ("002415", "海康威视", "sz"), ("600519", "贵州茅台", "sh"),
+                   ("300750", "宁德时代", "sz"), ("002594", "比亚迪", "sz")]
+            for code, name, market in hots:
+                if code not in st.session_state.monitored_stocks:
+                    if st.button(f"{name}", key=f"hot_{code}", use_container_width=True):
+                        st.session_state.monitored_stocks[code] = {'name': name, 'market': market}
+                        st.rerun()
         
-        # 消息推送
+        # 推送
         st.markdown("---")
         st.subheader("📱 微信推送")
-        
-        pushplus_token = st.text_input(
-            "PushPlus Token",
-            value=st.session_state.pushplus_token,
-            type="password",
-            help="访问 pushplus.plus 微信扫码获取"
-        )
-        st.session_state.pushplus_token = pushplus_token
+        token = st.text_input("PushPlus Token", value=st.session_state.pushplus_token, type="password")
+        st.session_state.pushplus_token = token
         
         col_a, col_b = st.columns(2)
         with col_a:
-            if st.button("🔔 测试", use_container_width=True):
-                if pushplus_token:
-                    success, msg = send_pushplus(
-                        pushplus_token,
-                        "🛡️ 测试消息",
-                        "<h3>推送测试成功！</h3><p>监控哨兵已就绪</p>"
-                    )
-                    if success:
-                        st.success("✅ 成功")
-                    else:
-                        st.error(f"❌ {msg}")
-                else:
-                    st.warning("请输入Token")
-        
+            if st.button("🔔 测试"):
+                if token:
+                    ok, msg = send_pushplus(token, "测试", "<h3>成功!</h3>")
+                    st.success("✅") if ok else st.error(f"❌{msg}")
         with col_b:
-            enable_push = st.checkbox("启用推送", value=True)
+            enable_push = st.checkbox("启用", value=True)
         
-        st.caption("💡 pushplus.plus 免费注册")
-        
-        # 刷新
         st.markdown("---")
-        if st.button("🔄 刷新数据", use_container_width=True):
+        if st.button("🔄 刷新", use_container_width=True):
             st.rerun()
-        
-        st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')}")
+        st.caption(f"⏰ {datetime.now().strftime('%H:%M:%S')} | 共{len(all_stocks)}只")
     
-    # ==================== 主内容 ====================
+    # ===== 主内容 =====
+    if not st.session_state.monitored_stocks:
+        st.info("👈 搜索添加股票开始监控")
+        return
+    
     all_alerts = []
+    codes = list(st.session_state.monitored_stocks.keys())
+    names = [st.session_state.monitored_stocks[c]['name'] for c in codes]
     
-    # 显示监控的股票数量
-    st.info(f"📊 当前监控 {len(st.session_state.monitored_stocks)} 只股票")
+    tabs = st.tabs(names) if len(codes) > 1 else [st.container()]
     
-    # 创建标签页
-    if len(st.session_state.monitored_stocks) > 1:
-        tabs = st.tabs([f"{STOCK_PRESETS.get(code, {}).get('name', code)}" for code in st.session_state.monitored_stocks])
-    else:
-        tabs = [st.container()]
-    
-    for idx, stock_code in enumerate(st.session_state.monitored_stocks):
-        stock_info = STOCK_PRESETS.get(stock_code, {"name": stock_code, "market": "sz", "sector": "未知"})
-        market = stock_info['market']
-        stock_name = stock_info['name']
+    for idx, code in enumerate(codes):
+        info = st.session_state.monitored_stocks[code]
+        market, name = info['market'], info['name']
         
         with tabs[idx]:
-            # 获取数据
-            quote = get_realtime_quote(stock_code, market)
-            hist_data = get_historical_data(stock_code, market, 90)
+            quote = get_realtime_quote(code, market)
+            hist = get_historical_data(code, market, 90)
             
             # 初始化配置
-            if stock_code not in st.session_state.stock_configs:
-                if hist_data is not None and not hist_data.empty:
-                    avg_price = float(hist_data['收盘'].mean())
-                    avg_volume = float(hist_data['成交量'].mean())
+            if code not in st.session_state.stock_configs:
+                if hist is not None and not hist.empty:
+                    avg = float(hist['收盘'].mean())
+                    lo, hi = float(hist['最低'].min()), float(hist['最高'].max())
                 else:
-                    avg_price = 50
-                    avg_volume = 10000
+                    avg, lo, hi = 50, 30, 70
                 
-                st.session_state.stock_configs[stock_code] = {
-                    'price_alert_enabled': True,
-                    'support_line': avg_price * 0.95,
-                    'resistance_line': avg_price * 1.05,
-                    'change_alert_enabled': True,
-                    'change_threshold': 5.0,
-                    'volume_alert_enabled': False,
-                    'volume_threshold': avg_volume * 2
+                st.session_state.stock_configs[code] = {
+                    'price_alert_enabled': True, 'price_min': round(lo*0.95, 2), 'price_max': round(hi*1.05, 2),
+                    'change_alert_enabled': True, 'change_min': -5.0, 'change_max': 5.0,
+                    'volume_alert_enabled': False, 'volume_threshold': 10.0,
+                    'amount_alert_enabled': False, 'amount_threshold': 10.0,
+                    'turnover_alert_enabled': False, 'turnover_threshold': 10.0,
                 }
             
-            config = st.session_state.stock_configs[stock_code]
+            cfg = st.session_state.stock_configs[code]
             
             # 报警设置
-            with st.expander(f"⚙️ 报警设置 - {stock_name}", expanded=False):
-                col_a, col_b, col_c = st.columns(3)
+            with st.expander(f"⚙️ {name} 报警设置"):
+                c1, c2, c3 = st.columns(3)
                 
-                with col_a:
-                    st.markdown("**💰 价格报警**")
-                    config['price_alert_enabled'] = st.checkbox(
-                        "启用", value=config['price_alert_enabled'], key=f"price_en_{stock_code}"
-                    )
-                    if config['price_alert_enabled']:
-                        if hist_data is not None and not hist_data.empty:
-                            p_min = float(hist_data['最低'].min()) * 0.8
-                            p_max = float(hist_data['最高'].max()) * 1.2
-                        else:
-                            p_min, p_max = 10.0, 200.0
-                        
-                        config['support_line'] = st.slider(
-                            "支撑位", p_min, p_max, float(config['support_line']), 0.5, key=f"sup_{stock_code}"
-                        )
-                        config['resistance_line'] = st.slider(
-                            "压力位", p_min, p_max, float(config['resistance_line']), 0.5, key=f"res_{stock_code}"
-                        )
+                with c1:
+                    st.markdown("**💰 价格区间**")
+                    cfg['price_alert_enabled'] = st.checkbox("启用", value=cfg['price_alert_enabled'], key=f"pen_{code}")
+                    if cfg['price_alert_enabled']:
+                        cfg['price_min'] = st.number_input("下限(元)", 0.0, 9999.0, float(cfg['price_min']), 0.1, key=f"pmin_{code}")
+                        cfg['price_max'] = st.number_input("上限(元)", 0.0, 9999.0, float(cfg['price_max']), 0.1, key=f"pmax_{code}")
+                    
+                    st.markdown("**📊 涨跌幅**")
+                    cfg['change_alert_enabled'] = st.checkbox("启用", value=cfg['change_alert_enabled'], key=f"cen_{code}")
+                    if cfg['change_alert_enabled']:
+                        cfg['change_min'] = st.number_input("跌幅阈值(%)", -20.0, 0.0, float(cfg['change_min']), 0.5, key=f"cmin_{code}")
+                        cfg['change_max'] = st.number_input("涨幅阈值(%)", 0.0, 20.0, float(cfg['change_max']), 0.5, key=f"cmax_{code}")
                 
-                with col_b:
-                    st.markdown("**📊 涨跌幅报警**")
-                    config['change_alert_enabled'] = st.checkbox(
-                        "启用", value=config['change_alert_enabled'], key=f"chg_en_{stock_code}"
-                    )
-                    if config['change_alert_enabled']:
-                        config['change_threshold'] = st.slider(
-                            "阈值(%)", 1.0, 10.0, float(config['change_threshold']), 0.5, key=f"chg_{stock_code}"
-                        )
+                with c2:
+                    st.markdown("**📦 成交量**")
+                    cfg['volume_alert_enabled'] = st.checkbox("启用", value=cfg['volume_alert_enabled'], key=f"ven_{code}")
+                    if cfg['volume_alert_enabled']:
+                        cfg['volume_threshold'] = st.number_input("阈值(万手)", 0.1, 1000.0, float(cfg['volume_threshold']), 1.0, key=f"vth_{code}")
+                    
+                    st.markdown("**💵 成交额**")
+                    cfg['amount_alert_enabled'] = st.checkbox("启用", value=cfg['amount_alert_enabled'], key=f"aen_{code}")
+                    if cfg['amount_alert_enabled']:
+                        cfg['amount_threshold'] = st.number_input("阈值(亿元)", 0.1, 500.0, float(cfg['amount_threshold']), 0.5, key=f"ath_{code}")
                 
-                with col_c:
-                    st.markdown("**📦 成交量报警**")
-                    config['volume_alert_enabled'] = st.checkbox(
-                        "启用", value=config['volume_alert_enabled'], key=f"vol_en_{stock_code}"
-                    )
-                    if config['volume_alert_enabled']:
-                        config['volume_threshold'] = st.slider(
-                            "阈值(万手)", 1.0, 100.0, float(config['volume_threshold']/10000), 1.0, key=f"vol_{stock_code}"
-                        ) * 10000
+                with c3:
+                    st.markdown("**🔄 换手率**")
+                    cfg['turnover_alert_enabled'] = st.checkbox("启用", value=cfg['turnover_alert_enabled'], key=f"ten_{code}")
+                    if cfg['turnover_alert_enabled']:
+                        cfg['turnover_threshold'] = st.number_input("阈值(%)", 0.1, 50.0, float(cfg['turnover_threshold']), 0.5, key=f"tth_{code}")
             
-            # 显示行情
+            # 行情
             if quote:
-                alerts = check_alerts_multi(quote, config)
+                alerts = check_alerts(quote, cfg)
                 all_alerts.extend(alerts)
                 
-                # 报警显示
-                for alert in alerts:
-                    if alert['level'] == 'error':
-                        st.error(alert['message'])
-                    elif alert['level'] == 'success':
-                        st.success(alert['message'])
+                for a in alerts:
+                    if a['level'] == 'error':
+                        st.error(a['message'])
+                    elif a['level'] == 'success':
+                        st.success(a['message'])
                     else:
-                        st.warning(alert['message'])
+                        st.warning(a['message'])
                 
-                # 指标卡片
-                col1, col2, col3, col4, col5 = st.columns(5)
-                with col1:
-                    delta_color = "normal" if quote['change_pct'] >= 0 else "inverse"
-                    st.metric("💰 最新价", f"¥{quote['price']:.2f}", f"{quote['change_pct']:.2f}%", delta_color=delta_color)
-                with col2:
-                    st.metric("📈 涨跌额", f"¥{quote['change_amount']:.2f}")
-                with col3:
-                    st.metric("📦 成交量", format_volume(quote['volume']))
-                with col4:
-                    st.metric("💵 成交额", format_amount(quote['amount']))
-                with col5:
-                    st.metric("⏰ 更新", quote['timestamp'].split(' ')[1])
+                cols = st.columns(6)
+                cols[0].metric("💰 最新价", f"¥{quote['price']:.2f}", f"{quote['change_pct']:.2f}%",
+                              delta_color="normal" if quote['change_pct'] >= 0 else "inverse")
+                cols[1].metric("📈 涨跌", f"¥{quote['change_amount']:.2f}")
+                cols[2].metric("📦 成交量", format_volume(quote['volume']))
+                cols[3].metric("💵 成交额", format_amount(quote['amount']))
+                cols[4].metric("🔄 换手率", f"{quote.get('turnover_rate', 0):.2f}%")
+                cols[5].metric("⏰ 更新", quote['timestamp'].split()[1])
             else:
-                st.warning(f"⏳ {stock_name} 暂无数据（非交易时段）")
+                st.warning(f"⏳ {name} 暂无数据")
             
-            # 走势图
-            if hist_data is not None and not hist_data.empty:
-                current_price = quote['price'] if quote else None
-                fig = create_stock_chart(
-                    hist_data, stock_name, stock_code,
-                    config.get('support_line') if config.get('price_alert_enabled') else None,
-                    config.get('resistance_line') if config.get('price_alert_enabled') else None,
-                    current_price
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # 新闻
-            with st.expander(f"📰 相关新闻", expanded=False):
-                news = get_stock_news(stock_code, stock_name)
-                if news:
-                    for n in news:
-                        st.markdown(f"• [{n['title']}]({n['url']})")
-                else:
-                    st.info("暂无相关新闻")
+            # 图表
+            if hist is not None and not hist.empty:
+                pmin = cfg['price_min'] if cfg['price_alert_enabled'] else None
+                pmax = cfg['price_max'] if cfg['price_alert_enabled'] else None
+                cur = quote['price'] if quote else None
+                st.plotly_chart(create_chart(hist, name, code, pmin, pmax, cur), use_container_width=True)
     
-    # 推送通知
-    if all_alerts and pushplus_token and enable_push:
-        content = "<h3>🚨 监控报警</h3><ul>"
-        for a in all_alerts:
-            content += f"<li>{a['message']}</li>"
-        content += f"</ul><p>时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>"
-        
-        alert_hash = hashlib.md5(content.encode()).hexdigest()
-        if alert_hash not in st.session_state.alert_history:
-            send_pushplus(pushplus_token, "🛡️ 监控报警", content)
-            st.session_state.alert_history.append(alert_hash)
-            if len(st.session_state.alert_history) > 100:
-                st.session_state.alert_history = st.session_state.alert_history[-50:]
+    # 推送
+    if all_alerts and token and enable_push:
+        content = "<h3>🚨 报警</h3><ul>" + "".join(f"<li>{a['message']}</li>" for a in all_alerts) + "</ul>"
+        h = hashlib.md5(content.encode()).hexdigest()
+        if h not in st.session_state.alert_history:
+            send_pushplus(token, "🛡️ 监控报警", content)
+            st.session_state.alert_history.append(h)
+            st.session_state.alert_history = st.session_state.alert_history[-50:]
     
-    # 页脚
     st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; color: #6c757d;'>
-        <p>📌 数据来源: 新浪财经 | 仅供参考,不构成投资建议</p>
-        <p>🛡️ 逻辑指挥官 v3.0 专业版</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.caption("📌 数据来源: 新浪财经 | 仅供参考 | 🛡️ 逻辑指挥官 v3.1")
     
-    # 自动刷新
     time.sleep(60)
     st.rerun()
 
