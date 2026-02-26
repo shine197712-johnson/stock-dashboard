@@ -1,6 +1,6 @@
 """
-逻辑指挥官 - 算力基建监控哨兵 v3.2
-修复非交易时段数据显示问题
+逻辑指挥官 - 算力基建监控哨兵 v3.3
+使用东方财富接口，解决海外访问问题
 """
 
 import streamlit as st
@@ -37,46 +37,46 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ==================== A股列表 ====================
+# ==================== 东方财富接口 ====================
 @st.cache_data(ttl=86400)
 def get_all_stocks():
-    """获取全部A股列表"""
+    """从东方财富获取全部A股列表"""
     stocks = {}
-    headers = {
-        'Referer': 'http://finance.sina.com.cn',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-    url = "http://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
     
-    # 沪市
-    for page in range(1, 60):
-        try:
-            params = {'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'sh_a'}
-            resp = requests.get(url, params=params, headers=headers, timeout=10)
+    try:
+        # 东方财富A股列表接口
+        url = "http://82.push2.eastmoney.com/api/qt/clist/get"
+        
+        # 沪深A股
+        for fs in ["m:0+t:6,7,13", "m:1+t:2,23"]:  # 深市、沪市
+            params = {
+                'pn': 1,
+                'pz': 5000,
+                'po': 1,
+                'np': 1,
+                'fltt': 2,
+                'invt': 2,
+                'fid': 'f3',
+                'fs': fs,
+                'fields': 'f12,f14'
+            }
+            
+            resp = requests.get(url, params=params, timeout=15)
             data = resp.json()
-            if not data:
-                break
-            for item in data:
-                code, name = item.get('symbol', ''), item.get('name', '')
-                if code and name:
-                    stocks[code] = {'name': name, 'market': 'sh'}
-        except:
-            break
-    
-    # 深市
-    for page in range(1, 100):
-        try:
-            params = {'page': page, 'num': 100, 'sort': 'symbol', 'asc': 1, 'node': 'sz_a'}
-            resp = requests.get(url, params=params, headers=headers, timeout=10)
-            data = resp.json()
-            if not data:
-                break
-            for item in data:
-                code, name = item.get('symbol', ''), item.get('name', '')
-                if code and name:
-                    stocks[code] = {'name': name, 'market': 'sz'}
-        except:
-            break
+            
+            if data.get('data') and data['data'].get('diff'):
+                for item in data['data']['diff']:
+                    code = item.get('f12', '')
+                    name = item.get('f14', '')
+                    if code and name:
+                        # 判断市场
+                        if code.startswith('6'):
+                            market = 'sh'
+                        else:
+                            market = 'sz'
+                        stocks[code] = {'name': name, 'market': market}
+    except Exception as e:
+        st.error(f"获取股票列表失败: {e}")
     
     return stocks
 
@@ -94,57 +94,62 @@ def search_stocks(keyword, all_stocks):
     return results[:15]
 
 
-# ==================== 数据获取（改进版）====================
+def get_eastmoney_secid(code, market):
+    """生成东方财富的secid"""
+    if market == 'sh':
+        return f"1.{code}"
+    else:
+        return f"0.{code}"
+
+
 def get_realtime_quote(stock_code, market="sz"):
-    """获取实时/收盘行情 - 使用腾讯接口（更稳定）"""
+    """从东方财富获取实时行情"""
     try:
-        # 腾讯接口格式
-        code_prefix = "sh" if market == "sh" else "sz"
-        tencent_code = f"{code_prefix}{stock_code}"
+        secid = get_eastmoney_secid(stock_code, market)
         
-        url = f"http://qt.gtimg.cn/q={tencent_code}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        url = "http://push2.eastmoney.com/api/qt/stock/get"
+        params = {
+            'secid': secid,
+            'fields': 'f43,f44,f45,f46,f47,f48,f50,f51,f52,f55,f57,f58,f60,f116,f117,f168,f169,f170',
+            'ut': 'fa5fd1943c7b386f172d6893dbfba10b',
+            'invt': 2
+        }
         
-        response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = 'gbk'
-        content = response.text
+        resp = requests.get(url, params=params, timeout=10)
+        data = resp.json()
         
-        # 解析腾讯数据格式
-        # v_sz300499="51~高澜股份~300499~19.82~19.66~19.72~67SEP..."
-        if '="' not in content or '~' not in content:
+        if not data.get('data'):
             return None
         
-        data_str = content.split('="')[1].rstrip('";')
-        parts = data_str.split('~')
+        d = data['data']
         
-        if len(parts) < 45:
-            return None
+        # 解析字段
+        # f43:最新价(分) f44:最高(分) f45:最低(分) f46:今开(分) f47:成交量(手) f48:成交额(元)
+        # f50:量比 f51:涨停价 f52:跌停价 f55:收益 f57:代码 f58:名称 f60:昨收(分)
+        # f116:总市值 f117:流通市值 f168:换手率 f169:涨跌额(分) f170:涨跌幅
         
-        # 腾讯数据字段
-        # 1:名称 2:代码 3:当前价 4:昨收 5:今开 6:成交量(手) 7:外盘 8:内盘
-        # 9:买一价 ... 30:最高 31:最低 32:涨幅 33:成交额 37:换手率 38:市盈率
-        name = parts[1]
-        current_price = float(parts[3]) if parts[3] else 0
-        pre_close = float(parts[4]) if parts[4] else 0
-        open_price = float(parts[5]) if parts[5] else 0
-        volume = float(parts[6]) if parts[6] else 0  # 已经是手
-        high = float(parts[33]) if len(parts) > 33 and parts[33] else 0
-        low = float(parts[34]) if len(parts) > 34 and parts[34] else 0
-        amount = float(parts[37]) if len(parts) > 37 and parts[37] else 0  # 成交额(万元)
-        turnover_rate = float(parts[38]) if len(parts) > 38 and parts[38] else 0
+        current_price = d.get('f43', 0)
+        if isinstance(current_price, str) and current_price == '-':
+            current_price = 0
+        current_price = float(current_price) / 100 if current_price else 0
         
-        # 成交额转换为元
-        amount = amount * 10000
+        pre_close = float(d.get('f60', 0)) / 100 if d.get('f60') else 0
+        high = float(d.get('f44', 0)) / 100 if d.get('f44') else 0
+        low = float(d.get('f45', 0)) / 100 if d.get('f45') else 0
+        open_price = float(d.get('f46', 0)) / 100 if d.get('f46') else 0
+        volume = float(d.get('f47', 0)) if d.get('f47') else 0  # 手
+        amount = float(d.get('f48', 0)) if d.get('f48') else 0  # 元
+        turnover = float(d.get('f168', 0)) if d.get('f168') else 0  # 换手率
+        change_pct = float(d.get('f170', 0)) / 100 if d.get('f170') else 0  # 涨跌幅
+        change_amount = float(d.get('f169', 0)) / 100 if d.get('f169') else 0  # 涨跌额
+        name = d.get('f58', '')
         
-        # 如果当前价为0，尝试使用昨收价（可能是停牌）
+        # 非交易时段，当前价可能为0
         if current_price <= 0:
             current_price = pre_close
         
         if current_price <= 0:
             return None
-        
-        change_amount = current_price - pre_close
-        change_pct = (change_amount / pre_close * 100) if pre_close > 0 else 0
         
         return {
             'name': name,
@@ -154,7 +159,7 @@ def get_realtime_quote(stock_code, market="sz"):
             'change_amount': round(change_amount, 2),
             'volume': volume,
             'amount': amount,
-            'turnover_rate': turnover_rate,
+            'turnover_rate': turnover,
             'high': high if high > 0 else current_price,
             'low': low if low > 0 else current_price,
             'open': open_price if open_price > 0 else current_price,
@@ -162,86 +167,50 @@ def get_realtime_quote(stock_code, market="sz"):
             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
     except Exception as e:
-        # 如果腾讯接口失败，尝试新浪接口
-        return get_realtime_quote_sina(stock_code, market)
-
-
-def get_realtime_quote_sina(stock_code, market="sz"):
-    """备用：新浪接口"""
-    try:
-        sina_code = f"{market}{stock_code}"
-        url = f"http://hq.sinajs.cn/list={sina_code}"
-        headers = {'Referer': 'http://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = 'gbk'
-        
-        match = re.search(r'"(.+)"', response.text)
-        if not match:
-            return None
-        
-        data = match.group(1).split(',')
-        if len(data) < 32 or data[0] == '':
-            return None
-        
-        current_price = float(data[3]) if data[3] else 0
-        pre_close = float(data[2]) if data[2] else 0
-        
-        # 非交易时段，当前价可能为0，使用昨收
-        if current_price <= 0:
-            current_price = pre_close
-        
-        if current_price <= 0:
-            return None
-        
-        change_amount = current_price - pre_close
-        change_pct = (change_amount / pre_close * 100) if pre_close > 0 else 0
-        volume = float(data[8]) if data[8] else 0
-        amount = float(data[9]) if data[9] else 0
-        
-        return {
-            'name': data[0],
-            'code': stock_code,
-            'price': current_price,
-            'change_pct': round(change_pct, 2),
-            'change_amount': round(change_amount, 2),
-            'volume': volume / 100,
-            'amount': amount,
-            'turnover_rate': 0,
-            'high': float(data[4]) if data[4] else current_price,
-            'low': float(data[5]) if data[5] else current_price,
-            'open': float(data[1]) if data[1] else current_price,
-            'pre_close': pre_close,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-    except:
         return None
 
 
 def get_historical_data(stock_code, market="sz", days=90):
-    """获取历史数据"""
+    """从东方财富获取历史K线"""
     try:
-        sina_code = f"{market}{stock_code}"
-        url = f"https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_data/KC_MarketDataService.getKLineData"
-        params = {'symbol': sina_code, 'scale': '240', 'ma': 'no', 'datalen': days}
-        headers = {'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
+        secid = get_eastmoney_secid(stock_code, market)
         
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        match = re.search(r'\((\[.+\])\)', response.text)
+        url = "http://push2his.eastmoney.com/api/qt/stock/kline/get"
+        params = {
+            'secid': secid,
+            'fields1': 'f1,f2,f3,f4,f5,f6',
+            'fields2': 'f51,f52,f53,f54,f55,f56,f57',
+            'klt': 101,  # 日K
+            'fqt': 1,    # 前复权
+            'end': '20500101',
+            'lmt': days,
+            'ut': 'fa5fd1943c7b386f172d6893dbfba10b'
+        }
         
-        if not match:
+        resp = requests.get(url, params=params, timeout=10)
+        data = resp.json()
+        
+        if not data.get('data') or not data['data'].get('klines'):
             return None
         
-        data = json.loads(match.group(1))
-        if not data:
-            return None
+        klines = data['data']['klines']
+        records = []
         
-        df = pd.DataFrame(data)
-        df['day'] = pd.to_datetime(df['day'])
-        df = df.rename(columns={'day': '日期', 'open': '开盘', 'high': '最高', 
-                                'low': '最低', 'close': '收盘', 'volume': '成交量'})
-        for col in ['开盘', '最高', '最低', '收盘', '成交量']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        for line in klines:
+            parts = line.split(',')
+            if len(parts) >= 7:
+                records.append({
+                    '日期': parts[0],
+                    '开盘': float(parts[1]),
+                    '收盘': float(parts[2]),
+                    '最高': float(parts[3]),
+                    '最低': float(parts[4]),
+                    '成交量': float(parts[5]),
+                    '成交额': float(parts[6])
+                })
+        
+        df = pd.DataFrame(records)
+        df['日期'] = pd.to_datetime(df['日期'])
         return df
     except:
         return None
@@ -343,22 +312,31 @@ def main():
     if 'pushplus_token' not in st.session_state:
         st.session_state.pushplus_token = ""
     
-    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 v3.2</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 v3.3</h1>', unsafe_allow_html=True)
     
-    # 判断是否交易时段
     now = datetime.now()
-    is_trading = now.weekday() < 5 and (
-        (now.hour == 9 and now.minute >= 30) or 
-        (10 <= now.hour <= 11) or 
-        (now.hour == 11 and now.minute <= 30) or
-        (13 <= now.hour < 15)
+    hour, minute, weekday = now.hour, now.minute, now.weekday()
+    
+    # 判断交易时段（北京时间）
+    is_trading = weekday < 5 and (
+        (hour == 9 and minute >= 30) or 
+        (hour == 10) or 
+        (hour == 11 and minute <= 30) or
+        (hour >= 13 and hour < 15)
     )
     
     if not is_trading:
-        st.info("💤 当前为非交易时段，显示最近收盘数据")
+        st.info("💤 当前为非交易时段，显示最新收盘数据")
     
     with st.spinner("加载A股列表..."):
         all_stocks = get_all_stocks()
+    
+    if not all_stocks:
+        st.error("⚠️ 无法加载股票列表，请稍后刷新")
+        if st.button("🔄 重新加载"):
+            st.cache_data.clear()
+            st.rerun()
+        return
     
     # 侧边栏
     with st.sidebar:
@@ -393,12 +371,14 @@ def main():
             if st.button("➕ 添加示例股票"):
                 st.session_state.monitored_stocks['301165'] = {'name': '锐捷网络', 'market': 'sz'}
                 st.session_state.monitored_stocks['300499'] = {'name': '高澜股份', 'market': 'sz'}
+                st.session_state.monitored_stocks['600487'] = {'name': '亨通光电', 'market': 'sh'}
                 st.rerun()
         
         with st.expander("🔥 热门股票"):
             hots = [("301165", "锐捷网络", "sz"), ("300499", "高澜股份", "sz"),
                    ("600487", "亨通光电", "sh"), ("002415", "海康威视", "sz"),
-                   ("300750", "宁德时代", "sz"), ("002594", "比亚迪", "sz")]
+                   ("300750", "宁德时代", "sz"), ("002594", "比亚迪", "sz"),
+                   ("600519", "贵州茅台", "sh"), ("000063", "中兴通讯", "sz")]
             for code, name, market in hots:
                 if code not in st.session_state.monitored_stocks:
                     if st.button(f"{name}", key=f"hot_{code}", use_container_width=True):
@@ -418,13 +398,18 @@ def main():
         enable_push = col_b.checkbox("启用", value=True)
         
         st.markdown("---")
-        if st.button("🔄 刷新", use_container_width=True):
+        col_r1, col_r2 = st.columns(2)
+        if col_r1.button("🔄 刷新", use_container_width=True):
             st.rerun()
+        if col_r2.button("🗑️ 清缓存", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+        
         st.caption(f"⏰ {now.strftime('%H:%M:%S')} | 共{len(all_stocks)}只")
     
     # 主内容
     if not st.session_state.monitored_stocks:
-        st.info("👈 搜索添加股票")
+        st.info("👈 搜索添加股票开始监控")
         return
     
     all_alerts = []
@@ -512,14 +497,14 @@ def main():
                 cols[4].metric("🔄 换手率", f"{quote.get('turnover_rate', 0):.2f}%")
                 cols[5].metric("⏰ 更新", quote['timestamp'].split()[1])
                 
-                # 第二行
                 cols2 = st.columns(4)
                 cols2[0].metric("📍 今开", f"¥{quote['open']:.2f}")
                 cols2[1].metric("⬆️ 最高", f"¥{quote['high']:.2f}")
                 cols2[2].metric("⬇️ 最低", f"¥{quote['low']:.2f}")
                 cols2[3].metric("📊 昨收", f"¥{quote['pre_close']:.2f}")
             else:
-                st.warning(f"⏳ {name} 数据获取失败，请稍后刷新")
+                st.warning(f"⏳ {name} ({code}) 数据获取失败")
+                st.caption("可能原因: 停牌、退市或网络问题，请点击左侧「清缓存」后重试")
             
             # 图表
             if hist is not None and not hist.empty:
@@ -527,6 +512,8 @@ def main():
                 pmax = cfg['price_max'] if cfg['price_alert_enabled'] else None
                 cur = quote['price'] if quote else None
                 st.plotly_chart(create_chart(hist, name, code, pmin, pmax, cur), use_container_width=True)
+            else:
+                st.info("📊 暂无历史K线数据")
     
     # 推送
     if all_alerts and token and enable_push:
@@ -538,7 +525,7 @@ def main():
             st.session_state.alert_history = st.session_state.alert_history[-50:]
     
     st.markdown("---")
-    st.caption("📌 数据来源: 腾讯/新浪财经 | 🛡️ 逻辑指挥官 v3.2")
+    st.caption("📌 数据来源: 东方财富 | 🛡️ 逻辑指挥官 v3.3")
     
     time.sleep(60)
     st.rerun()
