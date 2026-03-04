@@ -1,608 +1,871 @@
 """
-逻辑指挥官 - 算力基建监控哨兵 v3.4
-内置股票列表 + 手动输入，避免海外网络问题
+🛡️ 逻辑指挥官 - 算力基建监控哨兵 v3.5
+新增: 全球行情 + 财经新闻资讯中心
 """
 
 import streamlit as st
 import requests
-import json
-import re
+import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from datetime import datetime
-import pandas as pd
+from datetime import datetime, timedelta
 import time
-import hashlib
+import json
+import re
 
-# 页面配置
+# ==================== 页面配置 ====================
 st.set_page_config(
-    page_title="逻辑指挥官 - 算力基建监控哨兵",
-    page_icon="🛡️",
+    page_title="逻辑指挥官 v3.5 - 全球行情与资讯",
+    page_icon="🌍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+# ==================== 自定义CSS样式 ====================
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        padding: 1rem 0;
-    }
+/* 全局样式 */
+.stApp {
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #16213e 100%);
+}
+
+/* 卡片样式 */
+.metric-card {
+    background: linear-gradient(145deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(99,102,241,0.3);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    margin-bottom: 15px;
+}
+
+/* 新闻卡片 */
+.news-card {
+    background: linear-gradient(145deg, rgba(30,41,59,0.85), rgba(15,23,42,0.9));
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 10px;
+    border-left: 4px solid #6366f1;
+    transition: all 0.3s ease;
+}
+.news-card:hover {
+    transform: translateX(5px);
+    border-left-color: #22d3ee;
+    box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+}
+.news-card.politics { border-left-color: #ef4444; }
+.news-card.economy { border-left-color: #f59e0b; }
+.news-card.tech { border-left-color: #22d3ee; }
+
+.news-title {
+    color: #e2e8f0;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+.news-meta {
+    color: #64748b;
+    font-size: 12px;
+}
+.news-source {
+    color: #94a3b8;
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+/* 指数卡片 */
+.index-card {
+    background: linear-gradient(145deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+    border-radius: 12px;
+    padding: 15px;
+    text-align: center;
+    border: 1px solid rgba(99,102,241,0.2);
+    margin-bottom: 10px;
+}
+.index-name {
+    color: #94a3b8;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+.index-value {
+    color: #f1f5f9;
+    font-size: 20px;
+    font-weight: bold;
+}
+.index-change {
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 5px;
+}
+.index-up { color: #22c55e; }
+.index-down { color: #ef4444; }
+
+/* 板块标题 */
+.section-title {
+    color: #e2e8f0;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(99,102,241,0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* 标签样式 */
+.tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 5px;
+}
+.tag-politics { background: rgba(239,68,68,0.2); color: #ef4444; }
+.tag-economy { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.tag-tech { background: rgba(34,211,238,0.2); color: #22d3ee; }
+
+/* 期货卡片 */
+.futures-card {
+    background: linear-gradient(145deg, rgba(30,41,59,0.85), rgba(15,23,42,0.9));
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(99,102,241,0.15);
+}
+.futures-name {
+    color: #94a3b8;
+    font-size: 11px;
+}
+.futures-price {
+    color: #f1f5f9;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+/* 更新时间 */
+.update-time {
+    color: #64748b;
+    font-size: 11px;
+    text-align: right;
+    margin-top: 10px;
+}
+
+/* 隐藏Streamlit默认元素 */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+.stDeployButton {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
+# ==================== 数据获取函数 ====================
 
-# ==================== 内置股票列表（300+常用股票）====================
-BUILTIN_STOCKS = {
-    # 算力/网络/通信
-    "301165": ("锐捷网络", "sz"), "000063": ("中兴通讯", "sz"), "600487": ("亨通光电", "sh"),
-    "002281": ("光迅科技", "sz"), "300502": ("新易盛", "sz"), "002396": ("星网锐捷", "sz"),
-    "603019": ("中科曙光", "sh"), "000977": ("浪潮信息", "sz"), "688256": ("寒武纪", "sh"),
+@st.cache_data(ttl=300)
+def fetch_global_indices():
+    """获取全球主要股指数据"""
+    indices = []
     
-    # 新能源
-    "300750": ("宁德时代", "sz"), "002594": ("比亚迪", "sz"), "601012": ("隆基绿能", "sh"),
-    "300274": ("阳光电源", "sz"), "002459": ("晶澳科技", "sz"), "600438": ("通威股份", "sh"),
-    "002129": ("TCL中环", "sz"), "601865": ("福莱特", "sh"), "300763": ("锦浪科技", "sz"),
+    # 全球主要指数列表 (使用东方财富接口)
+    index_list = [
+        # 亚太
+        {"code": "1.000001", "name": "上证指数", "region": "中国"},
+        {"code": "0.399001", "name": "深证成指", "region": "中国"},
+        {"code": "0.399006", "name": "创业板指", "region": "中国"},
+        {"code": "100.HSI", "name": "恒生指数", "region": "香港"},
+        {"code": "100.N225", "name": "日经225", "region": "日本"},
+        {"code": "100.KS11", "name": "韩国综合", "region": "韩国"},
+        # 美洲
+        {"code": "100.DJIA", "name": "道琼斯", "region": "美国"},
+        {"code": "100.NDX", "name": "纳斯达克100", "region": "美国"},
+        {"code": "100.SPX", "name": "标普500", "region": "美国"},
+        # 欧洲
+        {"code": "100.FTSE", "name": "富时100", "region": "英国"},
+        {"code": "100.GDAXI", "name": "德国DAX", "region": "德国"},
+        {"code": "100.FCHI", "name": "法国CAC40", "region": "法国"},
+    ]
     
-    # 半导体/芯片
-    "002371": ("北方华创", "sz"), "688981": ("中芯国际", "sh"), "603501": ("韦尔股份", "sh"),
-    "002049": ("紫光国微", "sz"), "603986": ("兆易创新", "sh"), "300782": ("卓胜微", "sz"),
-    "688012": ("中微公司", "sh"), "002185": ("华天科技", "sz"), "600584": ("长电科技", "sh"),
+    for idx in index_list:
+        try:
+            # 东方财富行情接口
+            url = f"https://push2.eastmoney.com/api/qt/stock/get"
+            params = {
+                "secid": idx["code"],
+                "fields": "f43,f44,f45,f46,f47,f48,f57,f58,f169,f170",
+                "ut": "fa5fd1943c7b386f172d6893dbfba10b"
+            }
+            resp = requests.get(url, params=params, timeout=5)
+            data = resp.json().get("data", {})
+            
+            if data:
+                price = data.get("f43", 0) / 100 if data.get("f43") else 0
+                change_pct = data.get("f170", 0) / 100 if data.get("f170") else 0
+                change_amt = data.get("f169", 0) / 100 if data.get("f169") else 0
+                
+                indices.append({
+                    "name": idx["name"],
+                    "region": idx["region"],
+                    "price": price,
+                    "change_pct": change_pct,
+                    "change_amt": change_amt
+                })
+        except Exception as e:
+            # 使用模拟数据作为备用
+            indices.append({
+                "name": idx["name"],
+                "region": idx["region"],
+                "price": 0,
+                "change_pct": 0,
+                "change_amt": 0
+            })
     
-    # 消费/白酒
-    "600519": ("贵州茅台", "sh"), "000858": ("五粮液", "sz"), "000568": ("泸州老窖", "sz"),
-    "002304": ("洋河股份", "sz"), "600809": ("山西汾酒", "sh"), "000799": ("酒鬼酒", "sz"),
-    "603369": ("今世缘", "sh"), "000596": ("古井贡酒", "sz"), "600779": ("水井坊", "sh"),
-    
-    # 医药
-    "300760": ("迈瑞医疗", "sz"), "600276": ("恒瑞医药", "sh"), "000538": ("云南白药", "sz"),
-    "300122": ("智飞生物", "sz"), "002007": ("华兰生物", "sz"), "300347": ("泰格医药", "sz"),
-    "603259": ("药明康德", "sh"), "000661": ("长春高新", "sz"), "300015": ("爱尔眼科", "sz"),
-    
-    # 金融科技
-    "300059": ("东方财富", "sz"), "600588": ("用友网络", "sh"), "002230": ("科大讯飞", "sz"),
-    "688111": ("金山办公", "sh"), "300033": ("同花顺", "sz"), "002241": ("歌尔股份", "sz"),
-    
-    # 安防/智能制造
-    "002415": ("海康威视", "sz"), "002236": ("大华股份", "sz"), "300124": ("汇川技术", "sz"),
-    "601100": ("恒立液压", "sh"), "002008": ("大族激光", "sz"), "300285": ("国瓷材料", "sz"),
-    
-    # 互联网/平台
-    "002024": ("苏宁易购", "sz"), "300413": ("芒果超媒", "sz"), "002555": ("三七互娱", "sz"),
-    "002602": ("世纪华通", "sz"), "300418": ("昆仑万维", "sz"), "603444": ("吉比特", "sh"),
-    
-    # 汽车
-    "600104": ("上汽集团", "sh"), "000625": ("长安汽车", "sz"), "601238": ("广汽集团", "sh"),
-    "002920": ("德赛西威", "sz"), "603799": ("华友钴业", "sh"), "300450": ("先导智能", "sz"),
-    
-    # 银行/保险/券商
-    "601398": ("工商银行", "sh"), "601288": ("农业银行", "sh"), "601939": ("建设银行", "sh"),
-    "600036": ("招商银行", "sh"), "601318": ("中国平安", "sh"), "601628": ("中国人寿", "sh"),
-    "600030": ("中信证券", "sh"), "601688": ("华泰证券", "sh"), "600837": ("海通证券", "sh"),
-    
-    # 地产/建材
-    "000002": ("万科A", "sz"), "001979": ("招商蛇口", "sz"), "600048": ("保利发展", "sh"),
-    "600585": ("海螺水泥", "sh"), "002271": ("东方雨虹", "sz"), "603392": ("万泰生物", "sh"),
-    
-    # 军工
-    "600893": ("航发动力", "sh"), "000768": ("中航西飞", "sz"), "600760": ("中航沈飞", "sh"),
-    "002179": ("中航光电", "sz"), "600118": ("中国卫星", "sh"), "000687": ("华讯方舟", "sz"),
-    
-    # 电力/能源
-    "600900": ("长江电力", "sh"), "601985": ("中国核电", "sh"), "003816": ("中国广核", "sz"),
-    "600023": ("浙能电力", "sh"), "600886": ("国投电力", "sh"), "601991": ("大唐发电", "sh"),
-    
-    # 其他热门
-    "300499": ("高澜股份", "sz"), "600030": ("中信证券", "sh"), "601899": ("紫金矿业", "sh"),
-    "603288": ("海天味业", "sh"), "000333": ("美的集团", "sz"), "000651": ("格力电器", "sz"),
-    "600887": ("伊利股份", "sh"), "000895": ("双汇发展", "sz"), "600309": ("万华化学", "sh"),
-}
+    return indices
 
-
-def search_stocks(keyword):
-    """搜索内置股票"""
-    if not keyword:
-        return []
-    keyword = keyword.upper()
-    results = []
-    for code, (name, market) in BUILTIN_STOCKS.items():
-        if keyword in code or keyword in name:
-            results.append({'code': code, 'name': name, 'market': market})
-    results.sort(key=lambda x: (keyword not in x['code'], x['code']))
-    return results[:15]
-
-
-def get_market_by_code(code):
-    """根据代码判断市场"""
-    if code.startswith('6'):
-        return 'sh'
-    elif code.startswith('0') or code.startswith('3'):
-        return 'sz'
-    else:
-        return 'sz'
-
-
-# ==================== 数据获取（多源重试）====================
-def get_realtime_quote(stock_code, market="sz"):
-    """获取实时行情 - 多数据源重试"""
+@st.cache_data(ttl=300)
+def fetch_futures_data():
+    """获取期货数据"""
+    futures = []
     
-    # 尝试方法1: 新浪财经
-    quote = get_quote_sina(stock_code, market)
-    if quote:
-        return quote
+    futures_list = [
+        {"code": "113.IH00", "name": "上证50期货", "type": "股指"},
+        {"code": "113.IF00", "name": "沪深300期货", "type": "股指"},
+        {"code": "113.IC00", "name": "中证500期货", "type": "股指"},
+        {"code": "113.AU0", "name": "黄金", "type": "贵金属"},
+        {"code": "113.AG0", "name": "白银", "type": "贵金属"},
+        {"code": "113.SC0", "name": "原油", "type": "能源"},
+        {"code": "113.CU0", "name": "沪铜", "type": "有色"},
+        {"code": "113.AL0", "name": "沪铝", "type": "有色"},
+    ]
     
-    # 尝试方法2: 腾讯财经
-    quote = get_quote_tencent(stock_code, market)
-    if quote:
-        return quote
+    for fut in futures_list:
+        try:
+            url = f"https://push2.eastmoney.com/api/qt/stock/get"
+            params = {
+                "secid": fut["code"],
+                "fields": "f43,f44,f45,f46,f47,f48,f57,f58,f169,f170",
+                "ut": "fa5fd1943c7b386f172d6893dbfba10b"
+            }
+            resp = requests.get(url, params=params, timeout=5)
+            data = resp.json().get("data", {})
+            
+            if data:
+                price = data.get("f43", 0)
+                # 期货价格可能不需要除100
+                if fut["type"] == "股指":
+                    price = price / 100 if price else 0
+                change_pct = data.get("f170", 0) / 100 if data.get("f170") else 0
+                
+                futures.append({
+                    "name": fut["name"],
+                    "type": fut["type"],
+                    "price": price,
+                    "change_pct": change_pct
+                })
+        except:
+            futures.append({
+                "name": fut["name"],
+                "type": fut["type"],
+                "price": 0,
+                "change_pct": 0
+            })
     
+    return futures
+
+@st.cache_data(ttl=600)
+def fetch_news_data():
+    """获取财经新闻数据"""
+    news_data = {
+        "politics": [],
+        "economy": [],
+        "tech": []
+    }
+    
+    try:
+        # 东方财富财经新闻接口
+        url = "https://np-listapi.eastmoney.com/comm/web/getNewsByColumns"
+        
+        # 政治新闻 (时政要闻)
+        params_politics = {
+            "columns": "345",
+            "pageSize": 10,
+            "pageIndex": 0,
+            "type": 1
+        }
+        resp = requests.get(url, params=params_politics, timeout=10)
+        data = resp.json()
+        if data.get("data"):
+            for item in data["data"][:10]:
+                news_data["politics"].append({
+                    "title": item.get("title", ""),
+                    "time": item.get("showTime", ""),
+                    "source": item.get("mediaName", "东方财富"),
+                    "url": item.get("url", "")
+                })
+        
+        # 经济新闻 (财经要闻)
+        params_economy = {
+            "columns": "350",
+            "pageSize": 10,
+            "pageIndex": 0,
+            "type": 1
+        }
+        resp = requests.get(url, params=params_economy, timeout=10)
+        data = resp.json()
+        if data.get("data"):
+            for item in data["data"][:10]:
+                news_data["economy"].append({
+                    "title": item.get("title", ""),
+                    "time": item.get("showTime", ""),
+                    "source": item.get("mediaName", "东方财富"),
+                    "url": item.get("url", "")
+                })
+        
+        # 科技新闻 (科技要闻)
+        params_tech = {
+            "columns": "351",
+            "pageSize": 10,
+            "pageIndex": 0,
+            "type": 1
+        }
+        resp = requests.get(url, params=params_tech, timeout=10)
+        data = resp.json()
+        if data.get("data"):
+            for item in data["data"][:10]:
+                news_data["tech"].append({
+                    "title": item.get("title", ""),
+                    "time": item.get("showTime", ""),
+                    "source": item.get("mediaName", "东方财富"),
+                    "url": item.get("url", "")
+                })
+                
+    except Exception as e:
+        st.warning(f"新闻数据获取异常: {str(e)}")
+    
+    # 如果获取失败，使用备用新闻源
+    if not news_data["politics"]:
+        news_data = fetch_backup_news()
+    
+    return news_data
+
+def fetch_backup_news():
+    """备用新闻源 - 新浪财经"""
+    news_data = {
+        "politics": [],
+        "economy": [],
+        "tech": []
+    }
+    
+    try:
+        # 新浪财经滚动新闻
+        url = "https://feed.mix.sina.com.cn/api/roll/get"
+        
+        # 财经要闻
+        params = {
+            "pageid": "153",
+            "lid": "2516",
+            "num": 30,
+            "page": 1
+        }
+        resp = requests.get(url, params=params, timeout=10)
+        data = resp.json()
+        
+        if data.get("result", {}).get("data"):
+            items = data["result"]["data"]
+            
+            # 分类新闻
+            for item in items:
+                title = item.get("title", "")
+                news_item = {
+                    "title": title,
+                    "time": datetime.fromtimestamp(int(item.get("ctime", 0))).strftime("%H:%M") if item.get("ctime") else "",
+                    "source": item.get("media_name", "新浪财经"),
+                    "url": item.get("url", "")
+                }
+                
+                # 简单分类逻辑
+                if any(kw in title for kw in ["政策", "央行", "两会", "国务院", "发改委", "总书记", "习近平", "政府", "制裁", "关税"]):
+                    if len(news_data["politics"]) < 10:
+                        news_data["politics"].append(news_item)
+                elif any(kw in title for kw in ["AI", "人工智能", "芯片", "半导体", "机器人", "DeepSeek", "英伟达", "科技", "技术"]):
+                    if len(news_data["tech"]) < 10:
+                        news_data["tech"].append(news_item)
+                else:
+                    if len(news_data["economy"]) < 10:
+                        news_data["economy"].append(news_item)
+                        
+    except Exception as e:
+        pass
+    
+    return news_data
+
+@st.cache_data(ttl=60)
+def fetch_a_stock_list():
+    """获取A股列表"""
+    stocks = []
+    try:
+        # 沪市
+        url_sh = "https://push2.eastmoney.com/api/qt/clist/get"
+        params_sh = {
+            "pn": 1, "pz": 3000, "fs": "m:1+t:2,m:1+t:23",
+            "fields": "f12,f14", "ut": "fa5fd1943c7b386f172d6893dbfba10b"
+        }
+        resp_sh = requests.get(url_sh, params=params_sh, timeout=10)
+        data_sh = resp_sh.json().get("data", {}).get("diff", [])
+        for item in data_sh:
+            stocks.append({"code": item["f12"], "name": item["f14"], "market": "sh"})
+        
+        # 深市
+        params_sz = {
+            "pn": 1, "pz": 3000, "fs": "m:0+t:6,m:0+t:80",
+            "fields": "f12,f14", "ut": "fa5fd1943c7b386f172d6893dbfba10b"
+        }
+        resp_sz = requests.get(url_sh, params=params_sz, timeout=10)
+        data_sz = resp_sz.json().get("data", {}).get("diff", [])
+        for item in data_sz:
+            stocks.append({"code": item["f12"], "name": item["f14"], "market": "sz"})
+            
+    except Exception as e:
+        st.error(f"获取股票列表失败: {str(e)}")
+    
+    return stocks
+
+def get_stock_data(code, market):
+    """获取单只股票实时数据"""
+    try:
+        secid = f"1.{code}" if market == "sh" else f"0.{code}"
+        url = "https://push2.eastmoney.com/api/qt/stock/get"
+        params = {
+            "secid": secid,
+            "fields": "f43,f44,f45,f46,f47,f48,f50,f57,f58,f60,f169,f170,f171",
+            "ut": "fa5fd1943c7b386f172d6893dbfba10b"
+        }
+        resp = requests.get(url, params=params, timeout=5)
+        data = resp.json().get("data", {})
+        
+        if data:
+            return {
+                "code": code,
+                "name": data.get("f58", ""),
+                "price": data.get("f43", 0) / 100 if data.get("f43") else 0,
+                "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0,
+                "change_amt": data.get("f169", 0) / 100 if data.get("f169") else 0,
+                "volume": data.get("f47", 0) / 10000 if data.get("f47") else 0,  # 万手
+                "amount": data.get("f48", 0) / 100000000 if data.get("f48") else 0,  # 亿元
+                "turnover": data.get("f50", 0) / 100 if data.get("f50") else 0,  # 换手率
+                "high": data.get("f44", 0) / 100 if data.get("f44") else 0,
+                "low": data.get("f45", 0) / 100 if data.get("f45") else 0,
+                "open": data.get("f46", 0) / 100 if data.get("f46") else 0,
+                "prev_close": data.get("f60", 0) / 100 if data.get("f60") else 0,
+            }
+    except:
+        pass
     return None
 
+# ==================== 会话状态初始化 ====================
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = {}
+if "alerts" not in st.session_state:
+    st.session_state.alerts = {}
+if "pushplus_token" not in st.session_state:
+    st.session_state.pushplus_token = ""
+if "current_tab" not in st.session_state:
+    st.session_state.current_tab = "global"
 
-def get_quote_sina(stock_code, market):
-    """新浪财经接口"""
-    try:
-        sina_code = f"{market}{stock_code}"
-        url = f"https://hq.sinajs.cn/list={sina_code}"
-        headers = {
-            'Referer': 'https://finance.sina.com.cn',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = 'gbk'
-        
-        match = re.search(r'"(.+)"', response.text)
-        if not match:
-            return None
-        
-        data = match.group(1).split(',')
-        if len(data) < 32 or not data[0]:
-            return None
-        
-        current_price = float(data[3]) if data[3] else 0
-        pre_close = float(data[2]) if data[2] else 0
-        
-        if current_price <= 0:
-            current_price = pre_close
-        if current_price <= 0:
-            return None
-        
-        change_amount = current_price - pre_close
-        change_pct = (change_amount / pre_close * 100) if pre_close > 0 else 0
-        
-        return {
-            'name': data[0],
-            'code': stock_code,
-            'price': current_price,
-            'change_pct': round(change_pct, 2),
-            'change_amount': round(change_amount, 2),
-            'volume': float(data[8]) / 100 if data[8] else 0,
-            'amount': float(data[9]) if data[9] else 0,
-            'turnover_rate': 0,
-            'high': float(data[4]) if data[4] else current_price,
-            'low': float(data[5]) if data[5] else current_price,
-            'open': float(data[1]) if data[1] else current_price,
-            'pre_close': pre_close,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'source': '新浪'
-        }
-    except:
-        return None
-
-
-def get_quote_tencent(stock_code, market):
-    """腾讯财经接口"""
-    try:
-        tc_code = f"{market}{stock_code}"
-        url = f"https://qt.gtimg.cn/q={tc_code}"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        
-        response = requests.get(url, headers=headers, timeout=10)
-        response.encoding = 'gbk'
-        
-        if '="' not in response.text:
-            return None
-        
-        data_str = response.text.split('="')[1].rstrip('";')
-        parts = data_str.split('~')
-        
-        if len(parts) < 40:
-            return None
-        
-        name = parts[1]
-        current_price = float(parts[3]) if parts[3] else 0
-        pre_close = float(parts[4]) if parts[4] else 0
-        
-        if current_price <= 0:
-            current_price = pre_close
-        if current_price <= 0:
-            return None
-        
-        change_amount = current_price - pre_close
-        change_pct = (change_amount / pre_close * 100) if pre_close > 0 else 0
-        
-        return {
-            'name': name,
-            'code': stock_code,
-            'price': current_price,
-            'change_pct': round(change_pct, 2),
-            'change_amount': round(change_amount, 2),
-            'volume': float(parts[6]) if parts[6] else 0,
-            'amount': float(parts[37]) * 10000 if len(parts) > 37 and parts[37] else 0,
-            'turnover_rate': float(parts[38]) if len(parts) > 38 and parts[38] else 0,
-            'high': float(parts[33]) if len(parts) > 33 and parts[33] else current_price,
-            'low': float(parts[34]) if len(parts) > 34 and parts[34] else current_price,
-            'open': float(parts[5]) if parts[5] else current_price,
-            'pre_close': pre_close,
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'source': '腾讯'
-        }
-    except:
-        return None
-
-
-def get_historical_data(stock_code, market="sz", days=90):
-    """获取历史K线 - 新浪接口"""
-    try:
-        sina_code = f"{market}{stock_code}"
-        url = "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_data/KC_MarketDataService.getKLineData"
-        params = {'symbol': sina_code, 'scale': '240', 'ma': 'no', 'datalen': days}
-        headers = {'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0'}
-        
-        response = requests.get(url, params=params, headers=headers, timeout=10)
-        match = re.search(r'\((\[.+\])\)', response.text)
-        
-        if not match:
-            return None
-        
-        data = json.loads(match.group(1))
-        if not data:
-            return None
-        
-        df = pd.DataFrame(data)
-        df['day'] = pd.to_datetime(df['day'])
-        df = df.rename(columns={'day': '日期', 'open': '开盘', 'high': '最高', 
-                                'low': '最低', 'close': '收盘', 'volume': '成交量'})
-        for col in ['开盘', '最高', '最低', '收盘', '成交量']:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-        return df
-    except:
-        return None
-
-
-# ==================== 推送 ====================
-def send_pushplus(token, title, content):
-    if not token:
-        return False, "未配置"
-    try:
-        resp = requests.post("http://www.pushplus.plus/send", 
-                           json={"token": token, "title": title, "content": content, "template": "html"},
-                           timeout=10)
-        result = resp.json()
-        return (True, "成功") if result.get('code') == 200 else (False, result.get('msg', '失败'))
-    except Exception as e:
-        return False, str(e)
-
-
-# ==================== 报警 ====================
-def check_alerts(quote, config):
-    alerts = []
-    if not quote or quote.get('price', 0) <= 0:
-        return alerts
+# ==================== 侧边栏 ====================
+with st.sidebar:
+    st.markdown("## 🌍 逻辑指挥官 v3.5")
+    st.markdown("**全球行情与资讯中心**")
+    st.markdown("---")
     
-    name, price = quote['name'], quote['price']
-    volume, amount = quote['volume'], quote['amount']
-    turnover, change_pct = quote.get('turnover_rate', 0), quote['change_pct']
-    
-    if config.get('price_alert_enabled'):
-        if config.get('price_min', 0) > 0 and price <= config['price_min']:
-            alerts.append({'level': 'error', 'message': f"⚠️ {name} ¥{price:.2f} 跌破下限 ¥{config['price_min']:.2f}"})
-        if config.get('price_max', 0) > 0 and price >= config['price_max']:
-            alerts.append({'level': 'success', 'message': f"🎉 {name} ¥{price:.2f} 突破上限 ¥{config['price_max']:.2f}"})
-    
-    if config.get('change_alert_enabled'):
-        if change_pct <= config.get('change_min', -10):
-            alerts.append({'level': 'error', 'message': f"📉 {name} 跌幅 {change_pct:.2f}%"})
-        if change_pct >= config.get('change_max', 10):
-            alerts.append({'level': 'success', 'message': f"📈 {name} 涨幅 {change_pct:.2f}%"})
-    
-    if config.get('volume_alert_enabled'):
-        th = config.get('volume_threshold', 0) * 10000
-        if th > 0 and volume >= th:
-            alerts.append({'level': 'warning', 'message': f"📊 {name} 成交量 {volume/10000:.2f}万手"})
-    
-    if config.get('amount_alert_enabled'):
-        th = config.get('amount_threshold', 0) * 100000000
-        if th > 0 and amount >= th:
-            alerts.append({'level': 'warning', 'message': f"💰 {name} 成交额 {amount/100000000:.2f}亿"})
-    
-    if config.get('turnover_alert_enabled'):
-        th = config.get('turnover_threshold', 0)
-        if th > 0 and turnover >= th:
-            alerts.append({'level': 'warning', 'message': f"🔄 {name} 换手率 {turnover:.2f}%"})
-    
-    return alerts
-
-
-# ==================== 图表 ====================
-def create_chart(df, name, code, price_min=None, price_max=None, current=None):
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1, row_heights=[0.7, 0.3])
-    
-    fig.add_trace(go.Scatter(x=df['日期'], y=df['收盘'], mode='lines', name='收盘价',
-                            line=dict(color='#667eea', width=2), fill='tozeroy',
-                            fillcolor='rgba(102,126,234,0.1)'), row=1, col=1)
-    
-    if price_min and price_min > 0:
-        fig.add_hline(y=price_min, line_dash="dash", line_color="green",
-                     annotation_text=f"下限: ¥{price_min:.2f}", row=1, col=1)
-    if price_max and price_max > 0:
-        fig.add_hline(y=price_max, line_dash="dash", line_color="red",
-                     annotation_text=f"上限: ¥{price_max:.2f}", row=1, col=1)
-    if current and current > 0:
-        fig.add_hline(y=current, line_dash="dot", line_color="orange",
-                     annotation_text=f"现价: ¥{current:.2f}", row=1, col=1)
-    
-    colors = ['red' if r['收盘'] >= r['开盘'] else 'green' for _, r in df.iterrows()]
-    fig.add_trace(go.Bar(x=df['日期'], y=df['成交量'], marker_color=colors), row=2, col=1)
-    
-    fig.update_layout(height=450, template='plotly_white', showlegend=False, title=f'{name} ({code})')
-    return fig
-
-
-def fmt_vol(v):
-    return f"{v/10000:.2f}万手" if v >= 10000 else f"{v:.0f}手"
-
-def fmt_amt(a):
-    return f"{a/100000000:.2f}亿" if a >= 100000000 else (f"{a/10000:.2f}万" if a >= 10000 else f"{a:.2f}")
-
-
-# ==================== 主程序 ====================
-def main():
-    if 'monitored_stocks' not in st.session_state:
-        st.session_state.monitored_stocks = {}
-    if 'stock_configs' not in st.session_state:
-        st.session_state.stock_configs = {}
-    if 'alert_history' not in st.session_state:
-        st.session_state.alert_history = []
-    if 'pushplus_token' not in st.session_state:
-        st.session_state.pushplus_token = ""
-    
-    st.markdown('<h1 class="main-header">🛡️ 逻辑指挥官 v3.4</h1>', unsafe_allow_html=True)
-    
-    now = datetime.now()
-    hour, minute, weekday = now.hour, now.minute, now.weekday()
-    is_trading = weekday < 5 and ((hour == 9 and minute >= 30) or (hour == 10) or 
-                                   (hour == 11 and minute <= 30) or (13 <= hour < 15))
-    
-    if not is_trading:
-        st.info("💤 当前为非交易时段，显示最新收盘数据")
-    
-    # 侧边栏
-    with st.sidebar:
-        st.header("⚙️ 配置")
-        
-        # 搜索内置股票
-        st.subheader("🔍 搜索股票")
-        keyword = st.text_input("代码或名称", placeholder="300499 或 高澜")
-        
-        if keyword:
-            results = search_stocks(keyword)
-            if results:
-                for r in results:
-                    col1, col2 = st.columns([3, 1])
-                    col1.caption(f"{r['name']} ({r['code']})")
-                    if col2.button("➕", key=f"add_{r['code']}"):
-                        st.session_state.monitored_stocks[r['code']] = {'name': r['name'], 'market': r['market']}
-                        st.rerun()
-            else:
-                st.caption("内置列表未找到，可手动输入添加👇")
-        
-        # 手动输入任意代码
-        st.markdown("---")
-        st.subheader("✏️ 手动添加")
-        col_c, col_m = st.columns([2, 1])
-        manual_code = col_c.text_input("股票代码", placeholder="300499", max_chars=6, label_visibility="collapsed")
-        manual_market = col_m.selectbox("市场", ["sz", "sh"], label_visibility="collapsed")
-        
-        if st.button("➕ 添加此股票", use_container_width=True):
-            if manual_code and len(manual_code) == 6:
-                # 自动判断市场
-                market = get_market_by_code(manual_code) if manual_market == "auto" else manual_market
-                # 尝试获取股票名称
-                quote = get_realtime_quote(manual_code, market)
-                if quote:
-                    st.session_state.monitored_stocks[manual_code] = {'name': quote['name'], 'market': market}
-                    st.success(f"✅ 已添加 {quote['name']}")
-                    st.rerun()
-                else:
-                    st.error("❌ 获取失败，请检查代码或稍后重试")
-            else:
-                st.warning("请输入6位股票代码")
-        
-        # 监控列表
-        st.markdown("---")
-        st.subheader(f"📌 监控列表 ({len(st.session_state.monitored_stocks)})")
-        
-        for code, info in list(st.session_state.monitored_stocks.items()):
-            col1, col2 = st.columns([3, 1])
-            col1.caption(f"{info['name']} ({code})")
-            if col2.button("❌", key=f"del_{code}"):
-                del st.session_state.monitored_stocks[code]
-                st.rerun()
-        
-        if not st.session_state.monitored_stocks:
-            if st.button("➕ 添加示例股票", use_container_width=True):
-                st.session_state.monitored_stocks['301165'] = {'name': '锐捷网络', 'market': 'sz'}
-                st.session_state.monitored_stocks['300499'] = {'name': '高澜股份', 'market': 'sz'}
-                st.session_state.monitored_stocks['600487'] = {'name': '亨通光电', 'market': 'sh'}
-                st.rerun()
-        
-        # 热门股票
-        with st.expander("🔥 热门股票"):
-            hots = [("301165", "锐捷网络", "sz"), ("300499", "高澜股份", "sz"),
-                   ("600487", "亨通光电", "sh"), ("002415", "海康威视", "sz"),
-                   ("300750", "宁德时代", "sz"), ("002594", "比亚迪", "sz"),
-                   ("600519", "贵州茅台", "sh"), ("000063", ("中兴通讯", "sz"))]
-            for item in hots:
-                if len(item) == 3:
-                    code, name, market = item
-                else:
-                    continue
-                if code not in st.session_state.monitored_stocks:
-                    if st.button(f"{name}", key=f"hot_{code}", use_container_width=True):
-                        st.session_state.monitored_stocks[code] = {'name': name, 'market': market}
-                        st.rerun()
-        
-        # 微信推送
-        st.markdown("---")
-        st.subheader("📱 微信推送")
-        token = st.text_input("PushPlus Token", value=st.session_state.pushplus_token, type="password")
-        st.session_state.pushplus_token = token
-        
-        col_a, col_b = st.columns(2)
-        if col_a.button("🔔 测试"):
-            if token:
-                ok, msg = send_pushplus(token, "测试", "<h3>成功!</h3>")
-                st.success("✅") if ok else st.error(f"❌{msg}")
-        enable_push = col_b.checkbox("启用", value=True)
-        
-        st.markdown("---")
-        if st.button("🔄 刷新数据", use_container_width=True):
-            st.rerun()
-        st.caption(f"⏰ {now.strftime('%H:%M:%S')} | 内置{len(BUILTIN_STOCKS)}只股票")
-    
-    # 主内容
-    if not st.session_state.monitored_stocks:
-        st.info("👈 搜索或手动输入股票代码添加监控")
-        st.markdown("""
-        ### 💡 使用说明
-        1. **搜索添加**: 在左侧搜索框输入股票代码或名称
-        2. **手动添加**: 输入6位股票代码，选择市场(sz深圳/sh上海)
-        3. **快速添加**: 点击「热门股票」快速添加
-        """)
-        return
-    
-    all_alerts = []
-    codes = list(st.session_state.monitored_stocks.keys())
-    names = [st.session_state.monitored_stocks[c]['name'] for c in codes]
-    tabs = st.tabs(names) if len(codes) > 1 else [st.container()]
-    
-    for idx, code in enumerate(codes):
-        info = st.session_state.monitored_stocks[code]
-        market, name = info['market'], info['name']
-        
-        with tabs[idx]:
-            quote = get_realtime_quote(code, market)
-            hist = get_historical_data(code, market, 90)
-            
-            # 初始化配置
-            if code not in st.session_state.stock_configs:
-                if hist is not None and not hist.empty:
-                    lo, hi = float(hist['最低'].min()), float(hist['最高'].max())
-                else:
-                    lo, hi = 10, 100
-                st.session_state.stock_configs[code] = {
-                    'price_alert_enabled': True, 'price_min': round(lo*0.95, 2), 'price_max': round(hi*1.05, 2),
-                    'change_alert_enabled': True, 'change_min': -5.0, 'change_max': 5.0,
-                    'volume_alert_enabled': False, 'volume_threshold': 10.0,
-                    'amount_alert_enabled': False, 'amount_threshold': 10.0,
-                    'turnover_alert_enabled': False, 'turnover_threshold': 10.0,
-                }
-            
-            cfg = st.session_state.stock_configs[code]
-            
-            # 报警设置
-            with st.expander(f"⚙️ {name} 报警设置"):
-                c1, c2, c3 = st.columns(3)
-                
-                with c1:
-                    st.markdown("**💰 价格区间**")
-                    cfg['price_alert_enabled'] = st.checkbox("启用", value=cfg['price_alert_enabled'], key=f"pen_{code}")
-                    if cfg['price_alert_enabled']:
-                        cfg['price_min'] = st.number_input("下限(元)", 0.0, 9999.0, float(cfg['price_min']), 0.1, key=f"pmin_{code}")
-                        cfg['price_max'] = st.number_input("上限(元)", 0.0, 9999.0, float(cfg['price_max']), 0.1, key=f"pmax_{code}")
-                    
-                    st.markdown("**📊 涨跌幅**")
-                    cfg['change_alert_enabled'] = st.checkbox("启用", value=cfg['change_alert_enabled'], key=f"cen_{code}")
-                    if cfg['change_alert_enabled']:
-                        cfg['change_min'] = st.number_input("跌幅(%)", -20.0, 0.0, float(cfg['change_min']), 0.5, key=f"cmin_{code}")
-                        cfg['change_max'] = st.number_input("涨幅(%)", 0.0, 20.0, float(cfg['change_max']), 0.5, key=f"cmax_{code}")
-                
-                with c2:
-                    st.markdown("**📦 成交量**")
-                    cfg['volume_alert_enabled'] = st.checkbox("启用", value=cfg['volume_alert_enabled'], key=f"ven_{code}")
-                    if cfg['volume_alert_enabled']:
-                        cfg['volume_threshold'] = st.number_input("阈值(万手)", 0.1, 1000.0, float(cfg['volume_threshold']), 1.0, key=f"vth_{code}")
-                    
-                    st.markdown("**💵 成交额**")
-                    cfg['amount_alert_enabled'] = st.checkbox("启用", value=cfg['amount_alert_enabled'], key=f"aen_{code}")
-                    if cfg['amount_alert_enabled']:
-                        cfg['amount_threshold'] = st.number_input("阈值(亿)", 0.1, 500.0, float(cfg['amount_threshold']), 0.5, key=f"ath_{code}")
-                
-                with c3:
-                    st.markdown("**🔄 换手率**")
-                    cfg['turnover_alert_enabled'] = st.checkbox("启用", value=cfg['turnover_alert_enabled'], key=f"ten_{code}")
-                    if cfg['turnover_alert_enabled']:
-                        cfg['turnover_threshold'] = st.number_input("阈值(%)", 0.1, 50.0, float(cfg['turnover_threshold']), 0.5, key=f"tth_{code}")
-            
-            # 显示行情
-            if quote:
-                alerts = check_alerts(quote, cfg)
-                all_alerts.extend(alerts)
-                
-                for a in alerts:
-                    if a['level'] == 'error':
-                        st.error(a['message'])
-                    elif a['level'] == 'success':
-                        st.success(a['message'])
-                    else:
-                        st.warning(a['message'])
-                
-                cols = st.columns(6)
-                cols[0].metric("💰 最新价", f"¥{quote['price']:.2f}", f"{quote['change_pct']:.2f}%",
-                              delta_color="normal" if quote['change_pct'] >= 0 else "inverse")
-                cols[1].metric("📈 涨跌", f"¥{quote['change_amount']:.2f}")
-                cols[2].metric("📦 成交量", fmt_vol(quote['volume']))
-                cols[3].metric("💵 成交额", fmt_amt(quote['amount']))
-                cols[4].metric("🔄 换手率", f"{quote.get('turnover_rate', 0):.2f}%")
-                cols[5].metric("⏰ 更新", quote['timestamp'].split()[1])
-                
-                cols2 = st.columns(4)
-                cols2[0].metric("📍 今开", f"¥{quote['open']:.2f}")
-                cols2[1].metric("⬆️ 最高", f"¥{quote['high']:.2f}")
-                cols2[2].metric("⬇️ 最低", f"¥{quote['low']:.2f}")
-                cols2[3].metric("📊 昨收", f"¥{quote['pre_close']:.2f}")
-            else:
-                st.warning(f"⏳ {name} ({code}) 数据获取失败，请稍后刷新")
-            
-            # 图表
-            if hist is not None and not hist.empty:
-                pmin = cfg['price_min'] if cfg['price_alert_enabled'] else None
-                pmax = cfg['price_max'] if cfg['price_alert_enabled'] else None
-                cur = quote['price'] if quote else None
-                st.plotly_chart(create_chart(hist, name, code, pmin, pmax, cur), use_container_width=True)
-    
-    # 推送
-    if all_alerts and token and enable_push:
-        content = "<h3>🚨 报警</h3><ul>" + "".join(f"<li>{a['message']}</li>" for a in all_alerts) + "</ul>"
-        h = hashlib.md5(content.encode()).hexdigest()
-        if h not in st.session_state.alert_history:
-            send_pushplus(token, "🛡️ 报警", content)
-            st.session_state.alert_history.append(h)
-            st.session_state.alert_history = st.session_state.alert_history[-50:]
+    # 功能切换
+    tab_selection = st.radio(
+        "📊 功能模块",
+        ["🌍 全球行情资讯", "📈 A股监控"],
+        index=0 if st.session_state.current_tab == "global" else 1,
+        label_visibility="collapsed"
+    )
+    st.session_state.current_tab = "global" if "全球" in tab_selection else "a_stock"
     
     st.markdown("---")
-    st.caption("📌 数据来源: 新浪/腾讯财经 | 🛡️ 逻辑指挥官 v3.4")
     
-    time.sleep(60)
-    st.rerun()
+    if st.session_state.current_tab == "a_stock":
+        # A股搜索
+        st.markdown("### 🔍 A股搜索")
+        search_query = st.text_input("输入代码或名称", placeholder="如: 301165 或 锐捷")
+        
+        if search_query:
+            all_stocks = fetch_a_stock_list()
+            results = [s for s in all_stocks if search_query.lower() in s["code"].lower() or search_query in s["name"]][:10]
+            
+            if results:
+                st.markdown("**搜索结果:**")
+                for stock in results:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**{stock['name']}** ({stock['code']})")
+                    with col2:
+                        if st.button("➕", key=f"add_{stock['code']}"):
+                            st.session_state.watchlist[stock["code"]] = {
+                                "name": stock["name"],
+                                "market": stock["market"]
+                            }
+                            st.success(f"已添加 {stock['name']}")
+                            st.rerun()
+        
+        st.markdown("---")
+        st.markdown("### 📋 监控列表")
+        
+        if st.session_state.watchlist:
+            for code in list(st.session_state.watchlist.keys()):
+                stock = st.session_state.watchlist[code]
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f"**{stock['name']}** ({code})")
+                with col2:
+                    if st.button("🗑️", key=f"del_{code}"):
+                        del st.session_state.watchlist[code]
+                        st.rerun()
+        else:
+            st.info("暂无监控股票")
+    
+    st.markdown("---")
+    
+    # 推送设置
+    with st.expander("🔔 推送设置"):
+        token = st.text_input("PushPlus Token", type="password", value=st.session_state.pushplus_token)
+        if token != st.session_state.pushplus_token:
+            st.session_state.pushplus_token = token
+        st.caption("[获取Token](https://www.pushplus.plus/)")
+    
+    # 刷新按钮
+    if st.button("🔄 刷新数据", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+    
+    st.markdown("---")
+    st.caption(f"🕐 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
+# ==================== 主界面 ====================
 
-if __name__ == "__main__":
-    main()
+if st.session_state.current_tab == "global":
+    # ==================== 全球行情资讯页面 ====================
+    
+    st.markdown("""
+    <div style='text-align: center; padding: 20px 0;'>
+        <h1 style='color: #e2e8f0; font-size: 32px; margin-bottom: 5px;'>
+            🌍 全球行情与资讯中心
+        </h1>
+        <p style='color: #64748b; font-size: 14px;'>
+            实时追踪全球市场动态 · 政治经济科技资讯一网打尽
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 获取数据
+    with st.spinner("正在加载全球行情数据..."):
+        indices = fetch_global_indices()
+        futures = fetch_futures_data()
+        news = fetch_news_data()
+    
+    # ==================== 全球股指行情 ====================
+    st.markdown("""
+    <div class='section-title'>
+        📊 全球主要股指
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 分区域显示
+    regions = {
+        "🇨🇳 中国大陆": ["上证指数", "深证成指", "创业板指"],
+        "🇭🇰 港股": ["恒生指数"],
+        "🇯🇵🇰🇷 日韩": ["日经225", "韩国综合"],
+        "🇺🇸 美股": ["道琼斯", "纳斯达克100", "标普500"],
+        "🇪🇺 欧洲": ["富时100", "德国DAX", "法国CAC40"]
+    }
+    
+    cols = st.columns(5)
+    for i, (region_name, idx_names) in enumerate(regions.items()):
+        with cols[i]:
+            st.markdown(f"**{region_name}**")
+            for idx_name in idx_names:
+                idx_data = next((x for x in indices if x["name"] == idx_name), None)
+                if idx_data:
+                    change_class = "index-up" if idx_data["change_pct"] >= 0 else "index-down"
+                    change_symbol = "▲" if idx_data["change_pct"] >= 0 else "▼"
+                    
+                    st.markdown(f"""
+                    <div class='index-card'>
+                        <div class='index-name'>{idx_data['name']}</div>
+                        <div class='index-value'>{idx_data['price']:,.2f}</div>
+                        <div class='index-change {change_class}'>
+                            {change_symbol} {abs(idx_data['change_pct']):.2f}%
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # ==================== 期货行情 ====================
+    st.markdown("""
+    <div class='section-title'>
+        📈 主要期货行情
+    </div>
+    """, unsafe_allow_html=True)
+    
+    fut_cols = st.columns(4)
+    fut_types = ["股指", "贵金属", "能源", "有色"]
+    
+    for i, fut_type in enumerate(fut_types):
+        with fut_cols[i]:
+            st.markdown(f"**{fut_type}期货**")
+            type_futures = [f for f in futures if f["type"] == fut_type]
+            for fut in type_futures:
+                change_class = "index-up" if fut["change_pct"] >= 0 else "index-down"
+                change_symbol = "+" if fut["change_pct"] >= 0 else ""
+                
+                st.markdown(f"""
+                <div class='futures-card'>
+                    <div class='futures-name'>{fut['name']}</div>
+                    <div class='futures-price'>{fut['price']:,.2f}</div>
+                    <span class='{change_class}'>{change_symbol}{fut['change_pct']:.2f}%</span>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # ==================== 新闻资讯 ====================
+    st.markdown("""
+    <div class='section-title'>
+        📰 今日财经资讯
+    </div>
+    """, unsafe_allow_html=True)
+    
+    news_cols = st.columns(3)
+    
+    # 政治新闻
+    with news_cols[0]:
+        st.markdown("""
+        <div style='background: rgba(239,68,68,0.1); padding: 10px 15px; border-radius: 10px; margin-bottom: 15px;'>
+            <span style='color: #ef4444; font-weight: 700; font-size: 16px;'>🏛️ 政治要闻 TOP 10</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if news["politics"]:
+            for i, item in enumerate(news["politics"][:10], 1):
+                st.markdown(f"""
+                <div class='news-card politics'>
+                    <div class='news-title'>{i}. {item['title'][:50]}{'...' if len(item['title']) > 50 else ''}</div>
+                    <div class='news-meta'>
+                        <span class='tag tag-politics'>政治</span>
+                        {item.get('time', '')}
+                    </div>
+                    <div class='news-source'>来源: {item.get('source', '财经媒体')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("暂无政治新闻")
+    
+    # 经济新闻
+    with news_cols[1]:
+        st.markdown("""
+        <div style='background: rgba(245,158,11,0.1); padding: 10px 15px; border-radius: 10px; margin-bottom: 15px;'>
+            <span style='color: #f59e0b; font-weight: 700; font-size: 16px;'>💰 经济要闻 TOP 10</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if news["economy"]:
+            for i, item in enumerate(news["economy"][:10], 1):
+                st.markdown(f"""
+                <div class='news-card economy'>
+                    <div class='news-title'>{i}. {item['title'][:50]}{'...' if len(item['title']) > 50 else ''}</div>
+                    <div class='news-meta'>
+                        <span class='tag tag-economy'>经济</span>
+                        {item.get('time', '')}
+                    </div>
+                    <div class='news-source'>来源: {item.get('source', '财经媒体')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("暂无经济新闻")
+    
+    # 科技新闻
+    with news_cols[2]:
+        st.markdown("""
+        <div style='background: rgba(34,211,238,0.1); padding: 10px 15px; border-radius: 10px; margin-bottom: 15px;'>
+            <span style='color: #22d3ee; font-weight: 700; font-size: 16px;'>🔬 科技要闻 TOP 10</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if news["tech"]:
+            for i, item in enumerate(news["tech"][:10], 1):
+                st.markdown(f"""
+                <div class='news-card tech'>
+                    <div class='news-title'>{i}. {item['title'][:50]}{'...' if len(item['title']) > 50 else ''}</div>
+                    <div class='news-meta'>
+                        <span class='tag tag-tech'>科技</span>
+                        {item.get('time', '')}
+                    </div>
+                    <div class='news-source'>来源: {item.get('source', '财经媒体')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("暂无科技新闻")
+    
+    # 更新时间
+    st.markdown(f"""
+    <div class='update-time'>
+        数据更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 数据来源: 东方财富/新浪财经
+    </div>
+    """, unsafe_allow_html=True)
+
+else:
+    # ==================== A股监控页面 ====================
+    
+    st.markdown("""
+    <div style='text-align: center; padding: 20px 0;'>
+        <h1 style='color: #e2e8f0; font-size: 32px; margin-bottom: 5px;'>
+            📈 A股实时监控
+        </h1>
+        <p style='color: #64748b; font-size: 14px;'>
+            自选股实时行情 · 智能报警推送
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 判断是否交易时间
+    now = datetime.now()
+    is_trading_time = (
+        now.weekday() < 5 and
+        ((9 <= now.hour < 11) or (now.hour == 11 and now.minute <= 30) or
+         (13 <= now.hour < 15))
+    )
+    
+    if not is_trading_time:
+        st.warning("⏰ 当前为非交易时段，显示最近收盘数据")
+    
+    if st.session_state.watchlist:
+        # 获取所有股票数据
+        stock_data_list = []
+        for code, info in st.session_state.watchlist.items():
+            data = get_stock_data(code, info["market"])
+            if data:
+                data["name"] = info["name"]
+                stock_data_list.append(data)
+        
+        if stock_data_list:
+            # 创建数据表格
+            cols = st.columns(3)
+            
+            for i, stock in enumerate(stock_data_list):
+                with cols[i % 3]:
+                    change_color = "#22c55e" if stock["change_pct"] >= 0 else "#ef4444"
+                    change_symbol = "▲" if stock["change_pct"] >= 0 else "▼"
+                    
+                    st.markdown(f"""
+                    <div class='metric-card'>
+                        <div style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;'>
+                            <span style='color: #e2e8f0; font-size: 16px; font-weight: 700;'>{stock['name']}</span>
+                            <span style='color: #64748b; font-size: 12px;'>{stock['code']}</span>
+                        </div>
+                        <div style='font-size: 28px; font-weight: 700; color: {change_color};'>
+                            ¥{stock['price']:.2f}
+                        </div>
+                        <div style='color: {change_color}; font-size: 14px; margin-top: 5px;'>
+                            {change_symbol} {stock['change_amt']:.2f} ({stock['change_pct']:.2f}%)
+                        </div>
+                        <div style='margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;'>
+                            <div>
+                                <span style='color: #64748b; font-size: 11px;'>成交量</span>
+                                <div style='color: #94a3b8; font-size: 13px;'>{stock['volume']:.2f}万手</div>
+                            </div>
+                            <div>
+                                <span style='color: #64748b; font-size: 11px;'>成交额</span>
+                                <div style='color: #94a3b8; font-size: 13px;'>{stock['amount']:.2f}亿</div>
+                            </div>
+                            <div>
+                                <span style='color: #64748b; font-size: 11px;'>换手率</span>
+                                <div style='color: #94a3b8; font-size: 13px;'>{stock['turnover']:.2f}%</div>
+                            </div>
+                            <div>
+                                <span style='color: #64748b; font-size: 11px;'>最高/最低</span>
+                                <div style='color: #94a3b8; font-size: 13px;'>{stock['high']:.2f}/{stock['low']:.2f}</div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # 报警设置
+                    with st.expander(f"⚙️ {stock['name']} 报警设置"):
+                        alert_key = stock["code"]
+                        if alert_key not in st.session_state.alerts:
+                            st.session_state.alerts[alert_key] = {
+                                "price_low": 0, "price_high": 0,
+                                "change_low": -10, "change_high": 10,
+                                "volume": 0, "amount": 0, "turnover": 0
+                            }
+                        
+                        alert = st.session_state.alerts[alert_key]
+                        
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            alert["price_low"] = st.number_input(
+                                "价格下限", value=alert["price_low"], 
+                                step=0.1, key=f"pl_{alert_key}"
+                            )
+                        with c2:
+                            alert["price_high"] = st.number_input(
+                                "价格上限", value=alert["price_high"],
+                                step=0.1, key=f"ph_{alert_key}"
+                            )
+                        
+                        c3, c4 = st.columns(2)
+                        with c3:
+                            alert["change_low"] = st.number_input(
+                                "跌幅报警(%)", value=alert["change_low"],
+                                step=0.5, key=f"cl_{alert_key}"
+                            )
+                        with c4:
+                            alert["change_high"] = st.number_input(
+                                "涨幅报警(%)", value=alert["change_high"],
+                                step=0.5, key=f"ch_{alert_key}"
+                            )
+                        
+                        alert["volume"] = st.number_input(
+                            "成交量报警(万手)", value=alert["volume"],
+                            step=100.0, key=f"vol_{alert_key}"
+                        )
+        else:
+            st.warning("无法获取股票数据，请稍后重试")
+    else:
+        st.info("👈 请在左侧搜索并添加股票到监控列表")
+        
+        # 快速添加热门股票
+        st.markdown("### 🔥 热门股票快速添加")
+        hot_stocks = [
+            {"code": "301165", "name": "锐捷网络", "market": "sz"},
+            {"code": "300750", "name": "宁德时代", "market": "sz"},
+            {"code": "600519", "name": "贵州茅台", "market": "sh"},
+            {"code": "000858", "name": "五粮液", "market": "sz"},
+            {"code": "002475", "name": "立讯精密", "market": "sz"},
+            {"code": "300059", "name": "东方财富", "market": "sz"},
+        ]
+        
+        cols = st.columns(3)
+        for i, stock in enumerate(hot_stocks):
+            with cols[i % 3]:
+                if st.button(f"➕ {stock['name']}", key=f"hot_{stock['code']}", use_container_width=True):
+                    st.session_state.watchlist[stock["code"]] = {
+                        "name": stock["name"],
+                        "market": stock["market"]
+                    }
+                    st.rerun()
+
+# ==================== 页脚 ====================
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #64748b; font-size: 12px; padding: 20px;'>
+    🛡️ 逻辑指挥官 v3.5 | 全球行情与资讯中心<br>
+    数据来源: 东方财富 / 新浪财经 | 仅供参考，不构成投资建议
+</div>
+""", unsafe_allow_html=True)
