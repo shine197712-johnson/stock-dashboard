@@ -1,6 +1,6 @@
 """
-📊 股市观察 v3.7
-专业级数据源架构 - 多源冗余 + 智能降级
+📊 股市观察 v3.8
+专业级数据源架构 + 国际资讯 (Reddit / Hacker News / 金十数据)
 """
 
 import streamlit as st
@@ -77,6 +77,9 @@ st.markdown("""
 .tag-politics { background: rgba(255, 59, 48, 0.15); color: #ff453a; }
 .tag-economy { background: rgba(255, 159, 10, 0.15); color: #ff9f0a; }
 .tag-tech { background: rgba(10, 132, 255, 0.15); color: #0a84ff; }
+.tag-reddit { background: rgba(255, 69, 0, 0.15); color: #ff4500; }
+.tag-hn { background: rgba(255, 102, 0, 0.15); color: #ff6600; }
+.tag-jin10 { background: rgba(232, 65, 66, 0.15); color: #e84142; }
 
 .divider { height: 1px; background: linear-gradient(90deg, transparent, #3a3a3c, transparent); margin: 40px 0; }
 .footer-info { text-align: center; color: #86868b; font-size: 12px; padding: 40px 0 20px 0; }
@@ -97,17 +100,45 @@ st.markdown("""
 
 .data-source { font-size: 10px; color: #3a3a3c; margin-top: 4px; }
 
+/* 快讯样式 */
+.flash-news { 
+    background: rgba(232, 65, 66, 0.08); 
+    border-left: 3px solid #e84142;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 0 12px 12px 0;
+}
+.flash-time { color: #e84142; font-size: 12px; font-weight: 600; }
+.flash-content { color: #f5f5f7; font-size: 13px; margin-top: 4px; line-height: 1.5; }
+
+/* Reddit/HN样式 */
+.intl-card {
+    background: rgba(28, 28, 30, 0.5);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.intl-title { color: #f5f5f7; font-size: 13px; font-weight: 500; line-height: 1.4; margin-bottom: 8px; }
+.intl-meta { color: #86868b; font-size: 11px; }
+.intl-stats { color: #0a84ff; font-size: 11px; font-weight: 500; }
+
 .stButton > button { background: rgba(10, 132, 255, 0.1) !important; color: #0a84ff !important; border: 1px solid rgba(10, 132, 255, 0.3) !important; border-radius: 10px !important; }
 .stButton > button:hover { background: rgba(10, 132, 255, 0.2) !important; }
 .stTextInput > div > div > input { background: #1c1c1e !important; color: #f5f5f7 !important; border: 1px solid #3a3a3c !important; border-radius: 10px !important; }
 .stExpander { background: rgba(28, 28, 30, 0.5) !important; border: 1px solid #2c2c2e !important; border-radius: 12px !important; }
+
+.tab-container { display: flex; gap: 8px; margin-bottom: 20px; }
+.tab-btn { padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.tab-active { background: #0a84ff; color: white; }
+.tab-inactive { background: rgba(255,255,255,0.1); color: #86868b; }
 </style>
 """, unsafe_allow_html=True)
 
 # ==================== 专业级数据获取模块 ====================
 
 class GlobalMarketData:
-    """全球市场数据聚合器 - 多数据源冗余架构"""
+    """全球市场数据聚合器"""
     
     def __init__(self):
         self.session = requests.Session()
@@ -118,136 +149,100 @@ class GlobalMarketData:
         })
         self.timeout = 8
     
-    def _safe_request(self, url, params=None, headers=None):
-        """安全请求封装"""
-        try:
-            resp = self.session.get(url, params=params, headers=headers, timeout=self.timeout)
-            resp.raise_for_status()
-            return resp.json()
-        except:
-            return None
-    
-    # ==================== 全球股指数据源 ====================
-    
     def get_indices_from_sina(self):
-        """新浪财经全球指数 - 数据源1"""
+        """新浪财经全球指数"""
         indices = {}
-        
-        # 新浪全球指数代码映射
         sina_codes = {
-            # A股指数
             "s_sh000001": {"name": "上证指数", "region": "中国大陆"},
             "s_sz399001": {"name": "深证成指", "region": "中国大陆"},
             "s_sz399006": {"name": "创业板指", "region": "中国大陆"},
-            # 港股
-            "rt_hkHSI": {"name": "恒生指数", "region": "中国香港"},
-            "rt_hkHSCEI": {"name": "国企指数", "region": "中国香港"},
-            "rt_hkHSTECH": {"name": "恒生科技", "region": "中国香港"},
-            # 美股
-            "gb_$dji": {"name": "道琼斯", "region": "美国"},
-            "gb_$ixic": {"name": "纳斯达克", "region": "美国"},
-            "gb_$inx": {"name": "标普500", "region": "美国"},
-            # 欧洲
-            "gb_$ftse": {"name": "富时100", "region": "英国"},
-            "gb_$dax": {"name": "德国DAX", "region": "德国"},
-            "gb_$cac": {"name": "法国CAC40", "region": "法国"},
-            # 亚太
-            "gb_$nikk": {"name": "日经225", "region": "日本"},
-            "gb_$kospi": {"name": "韩国综合", "region": "韩国"},
-            "gb_$twii": {"name": "台湾加权", "region": "中国台湾"},
-            "gb_$sensex": {"name": "印度SENSEX", "region": "印度"},
-            "gb_$asx": {"name": "澳洲标普200", "region": "澳大利亚"},
         }
         
         try:
             # A股指数
-            a_codes = "s_sh000001,s_sz399001,s_sz399006"
-            url = f"https://hq.sinajs.cn/list={a_codes}"
+            url = "https://hq.sinajs.cn/list=s_sh000001,s_sz399001,s_sz399006"
             headers = {'Referer': 'https://finance.sina.com.cn'}
             resp = self.session.get(url, headers=headers, timeout=self.timeout)
             resp.encoding = 'gbk'
             
             for line in resp.text.strip().split('\n'):
-                if '=' in line:
-                    code = line.split('=')[0].split('_')[-1]
-                    full_code = f"s_{code}"
-                    data_str = line.split('"')[1] if '"' in line else ""
-                    if data_str and full_code in sina_codes:
+                if '=' in line and '"' in line:
+                    data_str = line.split('"')[1]
+                    if data_str:
                         parts = data_str.split(',')
                         if len(parts) >= 4:
-                            info = sina_codes[full_code]
-                            indices[info["name"]] = {
-                                "name": info["name"],
-                                "region": info["region"],
-                                "price": float(parts[1]) if parts[1] else 0,
-                                "change_amt": float(parts[2]) if parts[2] else 0,
-                                "change_pct": float(parts[3]) if parts[3] else 0,
-                                "source": "新浪"
-                            }
-            
-            # 港股指数
-            hk_codes = "rt_hkHSI,rt_hkHSCEI,rt_hkHSTECH"
-            url = f"https://hq.sinajs.cn/list={hk_codes}"
-            resp = self.session.get(url, headers=headers, timeout=self.timeout)
-            resp.encoding = 'gbk'
-            
-            for line in resp.text.strip().split('\n'):
-                if '=' in line and 'rt_hk' in line:
-                    code = line.split('var hq_str_')[1].split('=')[0] if 'var hq_str_' in line else ""
-                    data_str = line.split('"')[1] if '"' in line else ""
-                    if data_str and code in sina_codes:
-                        parts = data_str.split(',')
-                        if len(parts) >= 9:
-                            info = sina_codes[code]
-                            price = float(parts[6]) if parts[6] else 0
-                            prev_close = float(parts[3]) if parts[3] else price
-                            change_amt = price - prev_close
-                            change_pct = (change_amt / prev_close * 100) if prev_close else 0
-                            indices[info["name"]] = {
-                                "name": info["name"],
-                                "region": info["region"],
-                                "price": price,
-                                "change_amt": change_amt,
-                                "change_pct": change_pct,
-                                "source": "新浪"
-                            }
-            
-            # 全球指数
-            global_codes = "gb_$dji,gb_$ixic,gb_$inx,gb_$ftse,gb_$dax,gb_$cac,gb_$nikk,gb_$kospi,gb_$twii,gb_$sensex,gb_$asx"
-            url = f"https://hq.sinajs.cn/list={global_codes}"
-            resp = self.session.get(url, headers=headers, timeout=self.timeout)
-            resp.encoding = 'gbk'
-            
-            for line in resp.text.strip().split('\n'):
-                if '=' in line:
-                    for code, info in sina_codes.items():
-                        if code.startswith('gb_') and code.split('gb_')[1] in line:
-                            data_str = line.split('"')[1] if '"' in line else ""
-                            if data_str:
-                                parts = data_str.split(',')
-                                if len(parts) >= 2:
-                                    price = float(parts[1]) if parts[1] else 0
-                                    prev_close = float(parts[26]) if len(parts) > 26 and parts[26] else price
-                                    change_amt = price - prev_close
-                                    change_pct = (change_amt / prev_close * 100) if prev_close else 0
+                            for code, info in sina_codes.items():
+                                if code.split('_')[-1] in line:
                                     indices[info["name"]] = {
                                         "name": info["name"],
                                         "region": info["region"],
-                                        "price": price,
-                                        "change_amt": change_amt,
-                                        "change_pct": change_pct,
+                                        "price": float(parts[1]) if parts[1] else 0,
+                                        "change_amt": float(parts[2]) if parts[2] else 0,
+                                        "change_pct": float(parts[3]) if parts[3] else 0,
                                         "source": "新浪"
                                     }
-                            break
-        except Exception as e:
+                                    break
+            
+            # 港股
+            url = "https://hq.sinajs.cn/list=rt_hkHSI,rt_hkHSCEI,rt_hkHSTECH"
+            resp = self.session.get(url, headers=headers, timeout=self.timeout)
+            resp.encoding = 'gbk'
+            
+            hk_map = {"HSI": "恒生指数", "HSCEI": "国企指数", "HSTECH": "恒生科技"}
+            for line in resp.text.strip().split('\n'):
+                if '=' in line and '"' in line:
+                    data_str = line.split('"')[1]
+                    if data_str:
+                        parts = data_str.split(',')
+                        if len(parts) >= 9:
+                            for code, name in hk_map.items():
+                                if code in line:
+                                    price = float(parts[6]) if parts[6] else 0
+                                    prev = float(parts[3]) if parts[3] else price
+                                    indices[name] = {
+                                        "name": name, "region": "中国香港",
+                                        "price": price,
+                                        "change_amt": price - prev,
+                                        "change_pct": ((price - prev) / prev * 100) if prev else 0,
+                                        "source": "新浪"
+                                    }
+                                    break
+            
+            # 全球指数
+            global_list = [
+                ("int_dji", "道琼斯", "美国"), ("int_nasdaq", "纳斯达克", "美国"), ("int_sp500", "标普500", "美国"),
+                ("int_ftse", "富时100", "英国"), ("int_dax", "德国DAX", "德国"), ("int_cac", "法国CAC40", "法国"),
+                ("int_nikkei", "日经225", "日本"), ("b_TWSE", "台湾加权", "中国台湾"), ("b_KOSPI", "韩国综合", "韩国"),
+            ]
+            
+            codes = ",".join([g[0] for g in global_list])
+            url = f"https://hq.sinajs.cn/list={codes}"
+            resp = self.session.get(url, headers=headers, timeout=self.timeout)
+            resp.encoding = 'gbk'
+            
+            for line in resp.text.strip().split('\n'):
+                if '=' in line and '"' in line:
+                    data_str = line.split('"')[1]
+                    if data_str:
+                        parts = data_str.split(',')
+                        for code, name, region in global_list:
+                            if code in line:
+                                if len(parts) >= 2:
+                                    price = float(parts[0]) if parts[0] else 0
+                                    change_pct = float(parts[1]) if len(parts) > 1 and parts[1] else 0
+                                    indices[name] = {
+                                        "name": name, "region": region,
+                                        "price": price, "change_amt": 0, "change_pct": change_pct,
+                                        "source": "新浪"
+                                    }
+                                break
+        except:
             pass
-        
         return indices
     
     def get_indices_from_eastmoney(self):
-        """东方财富全球指数 - 数据源2"""
+        """东方财富全球指数"""
         indices = {}
-        
         em_codes = [
             {"code": "1.000001", "name": "上证指数", "region": "中国大陆"},
             {"code": "0.399001", "name": "深证成指", "region": "中国大陆"},
@@ -264,25 +259,17 @@ class GlobalMarketData:
             {"code": "100.N225", "name": "日经225", "region": "日本"},
             {"code": "100.KS11", "name": "韩国综合", "region": "韩国"},
             {"code": "100.TWII", "name": "台湾加权", "region": "中国台湾"},
-            {"code": "100.SENSEX", "name": "印度SENSEX", "region": "印度"},
-            {"code": "100.AS51", "name": "澳洲标普200", "region": "澳大利亚"},
         ]
         
         def fetch_single(item):
             try:
                 url = "https://push2.eastmoney.com/api/qt/stock/get"
-                params = {
-                    "secid": item["code"],
-                    "fields": "f43,f44,f45,f46,f60,f169,f170",
-                    "ut": "fa5fd1943c7b386f172d6893dbfba10b"
-                }
+                params = {"secid": item["code"], "fields": "f43,f169,f170", "ut": "fa5fd1943c7b386f172d6893dbfba10b"}
                 resp = self.session.get(url, params=params, timeout=5)
                 data = resp.json().get("data", {})
-                
                 if data and data.get("f43"):
                     return {
-                        "name": item["name"],
-                        "region": item["region"],
+                        "name": item["name"], "region": item["region"],
                         "price": data.get("f43", 0) / 100,
                         "change_amt": data.get("f169", 0) / 100 if data.get("f169") else 0,
                         "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0,
@@ -293,222 +280,115 @@ class GlobalMarketData:
             return None
         
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {executor.submit(fetch_single, item): item for item in em_codes}
-            for future in as_completed(futures):
-                result = future.result()
+            for result in executor.map(fetch_single, em_codes):
                 if result:
                     indices[result["name"]] = result
-        
-        return indices
-    
-    def get_indices_from_tencent(self):
-        """腾讯财经全球指数 - 数据源3"""
-        indices = {}
-        
-        qq_codes = {
-            "sh000001": {"name": "上证指数", "region": "中国大陆"},
-            "sz399001": {"name": "深证成指", "region": "中国大陆"},
-            "sz399006": {"name": "创业板指", "region": "中国大陆"},
-            "hkHSI": {"name": "恒生指数", "region": "中国香港"},
-            "hkHSCEI": {"name": "国企指数", "region": "中国香港"},
-            "hkHSTECH": {"name": "恒生科技", "region": "中国香港"},
-            "usNDX": {"name": "纳斯达克", "region": "美国"},
-            "usDJI": {"name": "道琼斯", "region": "美国"},
-            "usINX": {"name": "标普500", "region": "美国"},
-        }
-        
-        try:
-            codes_str = ",".join(qq_codes.keys())
-            url = f"https://qt.gtimg.cn/q={codes_str}"
-            resp = self.session.get(url, timeout=self.timeout)
-            resp.encoding = 'gbk'
-            
-            for line in resp.text.strip().split(';'):
-                if '=' not in line:
-                    continue
-                for code, info in qq_codes.items():
-                    if f'v_{code}' in line:
-                        data_str = line.split('"')[1] if '"' in line else ""
-                        if data_str:
-                            parts = data_str.split('~')
-                            if len(parts) >= 40:
-                                indices[info["name"]] = {
-                                    "name": info["name"],
-                                    "region": info["region"],
-                                    "price": float(parts[3]) if parts[3] else 0,
-                                    "change_amt": float(parts[31]) if parts[31] else 0,
-                                    "change_pct": float(parts[32]) if parts[32] else 0,
-                                    "source": "腾讯"
-                                }
-                        break
-        except:
-            pass
-        
         return indices
     
     def get_all_indices(self):
-        """聚合所有数据源，智能择优"""
+        """聚合所有数据源"""
         all_indices = {}
         
-        # 并行获取所有数据源
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {
-                executor.submit(self.get_indices_from_sina): "sina",
                 executor.submit(self.get_indices_from_eastmoney): "eastmoney",
-                executor.submit(self.get_indices_from_tencent): "tencent",
+                executor.submit(self.get_indices_from_sina): "sina",
             }
-            
             source_data = {}
             for future in as_completed(futures):
-                source_name = futures[future]
                 try:
                     result = future.result()
                     if result:
-                        source_data[source_name] = result
+                        source_data[futures[future]] = result
                 except:
                     pass
         
-        # 定义需要展示的指数（按优先级排序的数据源）
         target_indices = [
-            {"name": "上证指数", "region": "中国大陆", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "深证成指", "region": "中国大陆", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "创业板指", "region": "中国大陆", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "恒生指数", "region": "中国香港", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "恒生科技", "region": "中国香港", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "国企指数", "region": "中国香港", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "道琼斯", "region": "美国", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "纳斯达克", "region": "美国", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "标普500", "region": "美国", "priority": ["sina", "eastmoney", "tencent"]},
-            {"name": "日经225", "region": "日本", "priority": ["sina", "eastmoney"]},
-            {"name": "韩国综合", "region": "韩国", "priority": ["sina", "eastmoney"]},
-            {"name": "台湾加权", "region": "中国台湾", "priority": ["sina", "eastmoney"]},
-            {"name": "富时100", "region": "英国", "priority": ["sina", "eastmoney"]},
-            {"name": "德国DAX", "region": "德国", "priority": ["sina", "eastmoney"]},
-            {"name": "法国CAC40", "region": "法国", "priority": ["sina", "eastmoney"]},
-            {"name": "印度SENSEX", "region": "印度", "priority": ["sina", "eastmoney"]},
+            "上证指数", "深证成指", "创业板指", "恒生指数", "恒生科技", "国企指数",
+            "道琼斯", "纳斯达克", "标普500", "日经225", "韩国综合", "台湾加权",
+            "富时100", "德国DAX", "法国CAC40"
         ]
         
-        # 智能选择最佳数据源
-        for idx_info in target_indices:
-            name = idx_info["name"]
-            for source in idx_info["priority"]:
+        region_map = {
+            "上证指数": "中国大陆", "深证成指": "中国大陆", "创业板指": "中国大陆",
+            "恒生指数": "中国香港", "恒生科技": "中国香港", "国企指数": "中国香港",
+            "道琼斯": "美国", "纳斯达克": "美国", "标普500": "美国",
+            "日经225": "日本", "韩国综合": "韩国", "台湾加权": "中国台湾",
+            "富时100": "英国", "德国DAX": "德国", "法国CAC40": "法国"
+        }
+        
+        for name in target_indices:
+            for source in ["eastmoney", "sina"]:
                 if source in source_data and name in source_data[source]:
                     data = source_data[source][name]
-                    if data["price"] > 0:  # 数据有效性校验
+                    if data["price"] > 0:
                         all_indices[name] = data
                         break
-            
-            # 如果所有数据源都没有数据，添加占位
             if name not in all_indices:
-                all_indices[name] = {
-                    "name": name,
-                    "region": idx_info["region"],
-                    "price": 0,
-                    "change_amt": 0,
-                    "change_pct": 0,
-                    "source": "暂无"
-                }
+                all_indices[name] = {"name": name, "region": region_map.get(name, ""), "price": 0, "change_amt": 0, "change_pct": 0, "source": "-"}
         
         return list(all_indices.values())
     
-    # ==================== 期货数据 ====================
-    
     def get_futures_data(self):
-        """获取期货数据 - 多源"""
+        """获取期货数据"""
         futures = []
-        
-        # 东方财富期货
         em_futures = [
-            {"code": "113.IH00", "name": "上证50期货", "type": "股指", "divisor": 100},
-            {"code": "113.IF00", "name": "沪深300期货", "type": "股指", "divisor": 100},
-            {"code": "113.IC00", "name": "中证500期货", "type": "股指", "divisor": 100},
-            {"code": "113.IM00", "name": "中证1000期货", "type": "股指", "divisor": 100},
-            {"code": "113.AU0", "name": "沪金主力", "type": "贵金属", "divisor": 1},
-            {"code": "113.AG0", "name": "沪银主力", "type": "贵金属", "divisor": 1},
-            {"code": "113.SC0", "name": "原油主力", "type": "能源", "divisor": 1},
-            {"code": "113.FU0", "name": "燃油主力", "type": "能源", "divisor": 1},
-            {"code": "113.CU0", "name": "沪铜主力", "type": "有色", "divisor": 1},
-            {"code": "113.AL0", "name": "沪铝主力", "type": "有色", "divisor": 1},
-            {"code": "113.ZN0", "name": "沪锌主力", "type": "有色", "divisor": 1},
-            {"code": "113.NI0", "name": "沪镍主力", "type": "有色", "divisor": 1},
+            {"code": "113.IH00", "name": "上证50期货", "type": "股指", "div": 100},
+            {"code": "113.IF00", "name": "沪深300期货", "type": "股指", "div": 100},
+            {"code": "113.IC00", "name": "中证500期货", "type": "股指", "div": 100},
+            {"code": "113.AU0", "name": "沪金主力", "type": "贵金属", "div": 1},
+            {"code": "113.AG0", "name": "沪银主力", "type": "贵金属", "div": 1},
+            {"code": "113.SC0", "name": "原油主力", "type": "能源", "div": 1},
+            {"code": "113.CU0", "name": "沪铜主力", "type": "有色", "div": 1},
+            {"code": "113.AL0", "name": "沪铝主力", "type": "有色", "div": 1},
         ]
         
         def fetch_future(item):
             try:
                 url = "https://push2.eastmoney.com/api/qt/stock/get"
-                params = {
-                    "secid": item["code"],
-                    "fields": "f43,f44,f45,f46,f60,f169,f170",
-                    "ut": "fa5fd1943c7b386f172d6893dbfba10b"
-                }
+                params = {"secid": item["code"], "fields": "f43,f170", "ut": "fa5fd1943c7b386f172d6893dbfba10b"}
                 resp = self.session.get(url, params=params, timeout=5)
                 data = resp.json().get("data", {})
-                
                 if data and data.get("f43"):
-                    price = data.get("f43", 0) / item["divisor"]
-                    return {
-                        "name": item["name"],
-                        "type": item["type"],
-                        "price": price,
-                        "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0,
-                    }
+                    return {"name": item["name"], "type": item["type"], "price": data.get("f43", 0) / item["div"], "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0}
             except:
                 pass
             return {"name": item["name"], "type": item["type"], "price": 0, "change_pct": 0}
         
         with ThreadPoolExecutor(max_workers=8) as executor:
-            results = list(executor.map(fetch_future, em_futures))
-            futures = [r for r in results if r]
-        
+            futures = list(executor.map(fetch_future, em_futures))
         return futures
-    
-    # ==================== 外汇数据 ====================
     
     def get_forex_data(self):
         """获取外汇数据"""
         forex = []
-        
-        forex_codes = [
-            {"code": "USDCNY", "name": "美元/人民币", "sina_code": "USDCNY"},
-            {"code": "EURCNY", "name": "欧元/人民币", "sina_code": "EURCNY"},
-            {"code": "JPYCNY", "name": "日元/人民币", "sina_code": "JPYCNY"},
-            {"code": "GBPCNY", "name": "英镑/人民币", "sina_code": "GBPCNY"},
-            {"code": "HKDCNY", "name": "港币/人民币", "sina_code": "HKDCNY"},
-        ]
-        
         try:
-            codes = ",".join([f"fx_s{c['sina_code']}" for c in forex_codes])
-            url = f"https://hq.sinajs.cn/list={codes}"
-            headers = {'Referer': 'https://finance.sina.com.cn'}
-            resp = self.session.get(url, headers=headers, timeout=self.timeout)
+            codes = [("USDCNY", "美元/人民币"), ("EURCNY", "欧元/人民币"), ("JPYCNY", "日元/人民币"), ("GBPCNY", "英镑/人民币"), ("HKDCNY", "港币/人民币")]
+            code_str = ",".join([f"fx_s{c[0]}" for c in codes])
+            url = f"https://hq.sinajs.cn/list={code_str}"
+            resp = self.session.get(url, headers={'Referer': 'https://finance.sina.com.cn'}, timeout=8)
             resp.encoding = 'gbk'
             
             for line in resp.text.strip().split('\n'):
-                if '=' in line and '"' in line:
+                if '"' in line:
                     data_str = line.split('"')[1]
                     if data_str:
                         parts = data_str.split(',')
                         if len(parts) >= 8:
-                            for fc in forex_codes:
-                                if fc["sina_code"] in line:
-                                    current = float(parts[1]) if parts[1] else 0
-                                    prev = float(parts[3]) if parts[3] else current
-                                    change_pct = ((current - prev) / prev * 100) if prev else 0
-                                    forex.append({
-                                        "name": fc["name"],
-                                        "price": current,
-                                        "change_pct": change_pct
-                                    })
+                            for code, name in codes:
+                                if code in line:
+                                    curr = float(parts[1]) if parts[1] else 0
+                                    prev = float(parts[3]) if parts[3] else curr
+                                    forex.append({"name": name, "price": curr, "change_pct": ((curr - prev) / prev * 100) if prev else 0})
                                     break
         except:
             pass
-        
         return forex
 
-# ==================== 新闻数据模块 ====================
+# ==================== 国际资讯模块 ====================
 
-class NewsAggregator:
-    """新闻聚合器"""
+class InternationalNews:
+    """国际资讯聚合器 - Reddit / Hacker News / 金十数据"""
     
     def __init__(self):
         self.session = requests.Session()
@@ -516,36 +396,195 @@ class NewsAggregator:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
     
-    def get_news_from_eastmoney(self):
-        """东方财富新闻"""
-        news = {"politics": [], "economy": [], "tech": []}
+    def get_reddit_hot_posts(self):
+        """Reddit 财经热帖 (r/wallstreetbets, r/stocks, r/investing)"""
+        posts = []
+        subreddits = ["wallstreetbets", "stocks", "investing"]
+        
+        for sub in subreddits:
+            try:
+                url = f"https://www.reddit.com/r/{sub}/hot.json?limit=5"
+                resp = self.session.get(url, timeout=10)
+                data = resp.json()
+                
+                if data.get("data", {}).get("children"):
+                    for post in data["data"]["children"][:5]:
+                        post_data = post.get("data", {})
+                        if post_data.get("stickied"):
+                            continue
+                        
+                        title = post_data.get("title", "")
+                        score = post_data.get("score", 0)
+                        comments = post_data.get("num_comments", 0)
+                        created = post_data.get("created_utc", 0)
+                        
+                        # 只取24小时内的帖子
+                        if created and (time.time() - created) < 86400:
+                            hours_ago = int((time.time() - created) / 3600)
+                            posts.append({
+                                "title": title[:80] + "..." if len(title) > 80 else title,
+                                "subreddit": f"r/{sub}",
+                                "score": score,
+                                "comments": comments,
+                                "time": f"{hours_ago}小时前" if hours_ago > 0 else "刚刚",
+                                "url": f"https://reddit.com{post_data.get('permalink', '')}"
+                            })
+            except:
+                pass
+        
+        # 按热度排序
+        posts.sort(key=lambda x: x["score"], reverse=True)
+        return posts[:10]
+    
+    def get_hackernews_hot(self):
+        """Hacker News 科技热帖"""
+        posts = []
         
         try:
-            url = "https://np-listapi.eastmoney.com/comm/web/getNewsByColumns"
+            # 获取热门帖子ID
+            url = "https://hacker-news.firebaseio.com/v0/topstories.json"
+            resp = self.session.get(url, timeout=10)
+            story_ids = resp.json()[:20]
             
-            # 财经要闻
+            def fetch_story(story_id):
+                try:
+                    url = f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+                    resp = self.session.get(url, timeout=5)
+                    return resp.json()
+                except:
+                    return None
+            
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                stories = list(executor.map(fetch_story, story_ids))
+            
+            for story in stories:
+                if story and story.get("title"):
+                    created = story.get("time", 0)
+                    # 24小时内
+                    if created and (time.time() - created) < 86400:
+                        hours_ago = int((time.time() - created) / 3600)
+                        posts.append({
+                            "title": story.get("title", "")[:80],
+                            "score": story.get("score", 0),
+                            "comments": story.get("descendants", 0),
+                            "time": f"{hours_ago}小时前" if hours_ago > 0 else "刚刚",
+                            "url": story.get("url", f"https://news.ycombinator.com/item?id={story.get('id')}")
+                        })
+            
+            posts.sort(key=lambda x: x["score"], reverse=True)
+        except:
+            pass
+        
+        return posts[:10]
+    
+    def get_jin10_flash(self):
+        """金十数据 7x24 快讯"""
+        flash_news = []
+        
+        try:
+            # 金十数据快讯接口
+            url = "https://flash-api.jin10.com/get_flash_list"
+            params = {
+                "channel": "-8200",
+                "vip": 1,
+                "t": int(time.time() * 1000)
+            }
+            headers = {
+                'User-Agent': 'Mozilla/5.0',
+                'Referer': 'https://www.jin10.com/',
+                'x-app-id': 'bVBF4FyRTn5NJF5n',
+                'x-version': '1.0.0'
+            }
+            
+            resp = self.session.get(url, params=params, headers=headers, timeout=10)
+            data = resp.json()
+            
+            if data.get("data"):
+                for item in data["data"][:15]:
+                    content = item.get("data", {})
+                    if isinstance(content, dict):
+                        text = content.get("content", "")
+                    else:
+                        text = str(content)
+                    
+                    # 清理HTML标签
+                    text = re.sub(r'<[^>]+>', '', text)
+                    
+                    if text and len(text) > 10:
+                        time_str = item.get("time", "")
+                        if time_str:
+                            try:
+                                time_str = time_str.split(" ")[1][:5] if " " in time_str else time_str[:5]
+                            except:
+                                time_str = ""
+                        
+                        # 判断重要性
+                        is_important = item.get("important", 0) == 1 or "【" in text
+                        
+                        flash_news.append({
+                            "content": text[:120] + "..." if len(text) > 120 else text,
+                            "time": time_str,
+                            "important": is_important
+                        })
+        except Exception as e:
+            pass
+        
+        # 备用：如果金十接口失败，使用东方财富快讯
+        if not flash_news:
+            flash_news = self.get_eastmoney_flash()
+        
+        return flash_news[:12]
+    
+    def get_eastmoney_flash(self):
+        """东方财富快讯（备用）"""
+        flash_news = []
+        try:
+            url = "https://np-listapi.eastmoney.com/comm/web/getNewsByColumns"
+            params = {"columns": "102", "pageSize": 15, "pageIndex": 0, "type": 1}
+            resp = self.session.get(url, params=params, timeout=10)
+            data = resp.json()
+            
+            if data.get("data"):
+                for item in data["data"][:12]:
+                    flash_news.append({
+                        "content": item.get("title", "")[:120],
+                        "time": item.get("showTime", "")[-5:] if item.get("showTime") else "",
+                        "important": False
+                    })
+        except:
+            pass
+        return flash_news
+
+# ==================== 新闻数据模块 ====================
+
+class NewsAggregator:
+    """国内新闻聚合器"""
+    
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+    
+    def get_news_from_eastmoney(self):
+        news = {"politics": [], "economy": [], "tech": []}
+        try:
+            url = "https://np-listapi.eastmoney.com/comm/web/getNewsByColumns"
             for col_id, category in [("350", "economy"), ("345", "politics"), ("351", "tech")]:
                 params = {"columns": col_id, "pageSize": 15, "pageIndex": 0, "type": 1}
                 resp = self.session.get(url, params=params, timeout=10)
                 data = resp.json()
-                
                 if data.get("data"):
                     for item in data["data"][:15]:
                         news[category].append({
                             "title": item.get("title", ""),
                             "time": item.get("showTime", ""),
-                            "source": item.get("mediaName", "东方财富"),
-                            "url": item.get("url", "")
+                            "source": item.get("mediaName", "东方财富")
                         })
         except:
             pass
-        
         return news
     
     def get_news_from_sina(self):
-        """新浪财经新闻"""
         news = {"politics": [], "economy": [], "tech": []}
-        
         try:
             url = "https://feed.mix.sina.com.cn/api/roll/get"
             params = {"pageid": "153", "lid": "2516", "num": 50, "page": 1}
@@ -558,15 +597,13 @@ class NewsAggregator:
                     news_item = {
                         "title": title,
                         "time": datetime.fromtimestamp(int(item.get("ctime", 0))).strftime("%H:%M") if item.get("ctime") else "",
-                        "source": item.get("media_name", "新浪财经"),
-                        "url": item.get("url", "")
+                        "source": item.get("media_name", "新浪财经")
                     }
                     
-                    # 智能分类
-                    if any(kw in title for kw in ["政策", "央行", "两会", "国务院", "发改委", "政府", "关税", "制裁", "外交", "领导人", "会议", "总书记"]):
+                    if any(kw in title for kw in ["政策", "央行", "两会", "国务院", "政府", "关税", "制裁"]):
                         if len(news["politics"]) < 15:
                             news["politics"].append(news_item)
-                    elif any(kw in title for kw in ["AI", "人工智能", "芯片", "半导体", "机器人", "DeepSeek", "科技", "技术", "算力", "大模型", "ChatGPT", "英伟达", "数据中心"]):
+                    elif any(kw in title for kw in ["AI", "人工智能", "芯片", "机器人", "科技", "算力", "大模型"]):
                         if len(news["tech"]) < 15:
                             news["tech"].append(news_item)
                     else:
@@ -574,104 +611,48 @@ class NewsAggregator:
                             news["economy"].append(news_item)
         except:
             pass
-        
-        return news
-    
-    def get_news_from_cls(self):
-        """财联社电报"""
-        news = {"politics": [], "economy": [], "tech": []}
-        
-        try:
-            url = "https://www.cls.cn/nodeapi/updateTelegraphList"
-            params = {"app": "CailianpressWeb", "os": "web", "sv": "7.7.5"}
-            resp = self.session.get(url, params=params, timeout=10)
-            data = resp.json()
-            
-            if data.get("data", {}).get("roll_data"):
-                for item in data["data"]["roll_data"][:50]:
-                    title = item.get("title", "") or item.get("content", "")[:60]
-                    if not title:
-                        continue
-                    
-                    news_item = {
-                        "title": title,
-                        "time": datetime.fromtimestamp(item.get("ctime", 0)).strftime("%H:%M") if item.get("ctime") else "",
-                        "source": "财联社",
-                        "url": ""
-                    }
-                    
-                    if any(kw in title for kw in ["政策", "央行", "政府", "部委", "会议"]):
-                        if len(news["politics"]) < 15:
-                            news["politics"].append(news_item)
-                    elif any(kw in title for kw in ["AI", "芯片", "科技", "算力", "机器人"]):
-                        if len(news["tech"]) < 15:
-                            news["tech"].append(news_item)
-                    else:
-                        if len(news["economy"]) < 15:
-                            news["economy"].append(news_item)
-        except:
-            pass
-        
         return news
     
     def get_all_news(self):
-        """聚合所有新闻源"""
         all_news = {"politics": [], "economy": [], "tech": []}
         
-        # 并行获取
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = [
-                executor.submit(self.get_news_from_eastmoney),
-                executor.submit(self.get_news_from_sina),
-                executor.submit(self.get_news_from_cls),
-            ]
-            
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(self.get_news_from_eastmoney), executor.submit(self.get_news_from_sina)]
             for future in as_completed(futures):
                 try:
                     result = future.result()
-                    for category in ["politics", "economy", "tech"]:
-                        all_news[category].extend(result.get(category, []))
+                    for cat in ["politics", "economy", "tech"]:
+                        all_news[cat].extend(result.get(cat, []))
                 except:
                     pass
         
-        # 去重并限制数量
-        for category in all_news:
-            seen_titles = set()
-            unique_news = []
-            for item in all_news[category]:
-                # 简单去重：取标题前20字符
+        for cat in all_news:
+            seen = set()
+            unique = []
+            for item in all_news[cat]:
                 key = item["title"][:20]
-                if key not in seen_titles:
-                    seen_titles.add(key)
-                    unique_news.append(item)
-            all_news[category] = unique_news[:10]
+                if key not in seen:
+                    seen.add(key)
+                    unique.append(item)
+            all_news[cat] = unique[:10]
         
         return all_news
 
 # ==================== A股数据模块 ====================
 
 class AStockData:
-    """A股数据"""
-    
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
     
     @st.cache_data(ttl=60)
     def get_stock_list(_self):
-        """获取A股列表"""
         stocks = []
         try:
             url = "https://push2.eastmoney.com/api/qt/clist/get"
-            
             for fs in ["m:1+t:2,m:1+t:23", "m:0+t:6,m:0+t:80"]:
                 market = "sh" if "m:1" in fs else "sz"
-                params = {
-                    "pn": 1, "pz": 3000, "fs": fs,
-                    "fields": "f12,f14", "ut": "fa5fd1943c7b386f172d6893dbfba10b"
-                }
+                params = {"pn": 1, "pz": 3000, "fs": fs, "fields": "f12,f14", "ut": "fa5fd1943c7b386f172d6893dbfba10b"}
                 resp = _self.session.get(url, params=params, timeout=10)
                 for item in resp.json().get("data", {}).get("diff", []):
                     stocks.append({"code": item["f12"], "name": item["f14"], "market": market})
@@ -680,22 +661,15 @@ class AStockData:
         return stocks
     
     def get_stock_realtime(self, code, market):
-        """获取股票实时数据"""
         try:
             secid = f"1.{code}" if market == "sh" else f"0.{code}"
             url = "https://push2.eastmoney.com/api/qt/stock/get"
-            params = {
-                "secid": secid,
-                "fields": "f43,f44,f45,f46,f47,f48,f50,f57,f58,f60,f169,f170,f171",
-                "ut": "fa5fd1943c7b386f172d6893dbfba10b"
-            }
+            params = {"secid": secid, "fields": "f43,f44,f45,f46,f47,f48,f50,f58,f60,f169,f170", "ut": "fa5fd1943c7b386f172d6893dbfba10b"}
             resp = self.session.get(url, params=params, timeout=5)
             data = resp.json().get("data", {})
-            
             if data:
                 return {
-                    "code": code,
-                    "name": data.get("f58", ""),
+                    "code": code, "name": data.get("f58", ""),
                     "price": data.get("f43", 0) / 100 if data.get("f43") else 0,
                     "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0,
                     "change_amt": data.get("f169", 0) / 100 if data.get("f169") else 0,
@@ -704,14 +678,12 @@ class AStockData:
                     "turnover": data.get("f50", 0) / 100 if data.get("f50") else 0,
                     "high": data.get("f44", 0) / 100 if data.get("f44") else 0,
                     "low": data.get("f45", 0) / 100 if data.get("f45") else 0,
-                    "open": data.get("f46", 0) / 100 if data.get("f46") else 0,
-                    "prev_close": data.get("f60", 0) / 100 if data.get("f60") else 0,
                 }
         except:
             pass
         return None
 
-# ==================== 数据缓存包装 ====================
+# ==================== 数据缓存 ====================
 
 @st.cache_data(ttl=120)
 def fetch_global_indices():
@@ -728,6 +700,18 @@ def fetch_forex_data():
 @st.cache_data(ttl=300)
 def fetch_news_data():
     return NewsAggregator().get_all_news()
+
+@st.cache_data(ttl=180)
+def fetch_reddit_posts():
+    return InternationalNews().get_reddit_hot_posts()
+
+@st.cache_data(ttl=180)
+def fetch_hackernews_posts():
+    return InternationalNews().get_hackernews_hot()
+
+@st.cache_data(ttl=60)
+def fetch_jin10_flash():
+    return InternationalNews().get_jin10_flash()
 
 @st.cache_data(ttl=60)
 def fetch_stock_list():
@@ -749,7 +733,7 @@ with st.sidebar:
     st.markdown("""
     <div style='padding: 20px 0;'>
         <div style='font-size: 24px; font-weight: 700; color: #f5f5f7;'>📊 股市观察</div>
-        <div style='font-size: 13px; color: #86868b; margin-top: 4px;'>全球行情与资讯</div>
+        <div style='font-size: 13px; color: #86868b; margin-top: 4px;'>全球行情与资讯 v3.8</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -767,7 +751,6 @@ with st.sidebar:
         if search:
             stocks = fetch_stock_list()
             results = [s for s in stocks if search.lower() in s["code"].lower() or search in s["name"]][:8]
-            
             for stock in results:
                 col1, col2 = st.columns([4, 1])
                 with col1:
@@ -794,7 +777,7 @@ with st.sidebar:
     
     st.markdown("<div style='height: 1px; background: #2c2c2e; margin: 20px 0;'></div>", unsafe_allow_html=True)
     
-    if st.button("刷新数据", use_container_width=True):
+    if st.button("🔄 刷新数据", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
@@ -805,7 +788,7 @@ with st.sidebar:
 if st.session_state.current_tab == "global":
     st.markdown("""
     <div class='main-title'>股市观察</div>
-    <div class='sub-title'>全球市场实时行情 · 财经资讯一览</div>
+    <div class='sub-title'>全球市场实时行情 · 国际财经资讯</div>
     """, unsafe_allow_html=True)
     
     # 获取数据
@@ -814,23 +797,24 @@ if st.session_state.current_tab == "global":
         futures = fetch_futures_data()
         forex = fetch_forex_data()
         news = fetch_news_data()
+        reddit_posts = fetch_reddit_posts()
+        hn_posts = fetch_hackernews_posts()
+        jin10_flash = fetch_jin10_flash()
     
     # ========== 全球股指 ==========
-    st.markdown("<div class='section-header'>全球股指</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>🌍 全球股指</div>", unsafe_allow_html=True)
     
-    cols = st.columns(4)
-    for i, idx in enumerate(indices):
-        with cols[i % 4]:
+    cols = st.columns(5)
+    for i, idx in enumerate(indices[:15]):
+        with cols[i % 5]:
             change_class = "up" if idx["change_pct"] > 0 else ("down" if idx["change_pct"] < 0 else "neutral")
             change_symbol = "+" if idx["change_pct"] > 0 else ""
-            
             st.markdown(f"""
             <div class='index-card'>
                 <div class='index-region'>{idx['region']}</div>
                 <div class='index-name'>{idx['name']}</div>
                 <div class='index-price'>{idx['price']:,.2f}</div>
                 <div class='index-change {change_class}'>{change_symbol}{idx['change_pct']:.2f}%</div>
-                <div class='data-source'>数据源: {idx.get('source', '-')}</div>
             </div>
             """, unsafe_allow_html=True)
     
@@ -838,10 +822,10 @@ if st.session_state.current_tab == "global":
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("<div class='section-header'>期货行情</div>", unsafe_allow_html=True)
-        fut_cols = st.columns(3)
-        for i, fut in enumerate(futures[:9]):
-            with fut_cols[i % 3]:
+        st.markdown("<div class='section-header'>📈 期货行情</div>", unsafe_allow_html=True)
+        fut_cols = st.columns(4)
+        for i, fut in enumerate(futures[:8]):
+            with fut_cols[i % 4]:
                 change_class = "up" if fut["change_pct"] > 0 else ("down" if fut["change_pct"] < 0 else "neutral")
                 change_symbol = "+" if fut["change_pct"] > 0 else ""
                 st.markdown(f"""
@@ -853,7 +837,7 @@ if st.session_state.current_tab == "global":
                 """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown("<div class='section-header'>外汇牌价</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>💱 外汇牌价</div>", unsafe_allow_html=True)
         if forex:
             fx_cols = st.columns(3)
             for i, fx in enumerate(forex[:6]):
@@ -870,37 +854,88 @@ if st.session_state.current_tab == "global":
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
-    # ========== 财经资讯 ==========
-    st.markdown("<div class='section-header'>财经资讯</div>", unsafe_allow_html=True)
+    # ========== 7x24快讯 ==========
+    st.markdown("<div class='section-header'>⚡ 7×24 实时快讯</div>", unsafe_allow_html=True)
+    
+    flash_cols = st.columns(2)
+    for i, flash in enumerate(jin10_flash[:10]):
+        with flash_cols[i % 2]:
+            importance_style = "border-left-color: #ff3b30;" if flash.get("important") else ""
+            st.markdown(f"""
+            <div class='flash-news' style='{importance_style}'>
+                <span class='flash-time'>{'🔴 ' if flash.get('important') else ''}{flash.get('time', '')}</span>
+                <div class='flash-content'>{flash.get('content', '')}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ========== 国际社区热帖 ==========
+    st.markdown("<div class='section-header'>🌐 国际社区热帖</div>", unsafe_allow_html=True)
+    
+    intl_cols = st.columns(2)
+    
+    # Reddit
+    with intl_cols[0]:
+        st.markdown("<div class='news-section-title'>🔥 Reddit 财经热帖</div>", unsafe_allow_html=True)
+        if reddit_posts:
+            for post in reddit_posts[:8]:
+                st.markdown(f"""
+                <div class='intl-card'>
+                    <div class='intl-title'>{post['title']}</div>
+                    <div class='intl-meta'>
+                        <span class='tag tag-reddit'>{post['subreddit']}</span>
+                        {post['time']}
+                    </div>
+                    <div class='intl-stats'>👍 {post['score']:,} · 💬 {post['comments']:,}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='color: #86868b; padding: 20px;'>暂无数据</div>", unsafe_allow_html=True)
+    
+    # Hacker News
+    with intl_cols[1]:
+        st.markdown("<div class='news-section-title'>🧡 Hacker News 科技热帖</div>", unsafe_allow_html=True)
+        if hn_posts:
+            for post in hn_posts[:8]:
+                st.markdown(f"""
+                <div class='intl-card'>
+                    <div class='intl-title'>{post['title']}</div>
+                    <div class='intl-meta'>
+                        <span class='tag tag-hn'>HN</span>
+                        {post['time']}
+                    </div>
+                    <div class='intl-stats'>👍 {post['score']:,} · 💬 {post['comments']:,}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='color: #86868b; padding: 20px;'>暂无数据</div>", unsafe_allow_html=True)
+    
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
+    
+    # ========== 国内财经资讯 ==========
+    st.markdown("<div class='section-header'>📰 国内财经资讯</div>", unsafe_allow_html=True)
     
     news_cols = st.columns(3)
-    
-    categories = [
-        ("politics", "🏛️ 政治要闻", "tag-politics"),
-        ("economy", "💰 经济要闻", "tag-economy"),
-        ("tech", "🔬 科技要闻", "tag-tech"),
-    ]
+    categories = [("politics", "🏛️ 政治要闻", "tag-politics"), ("economy", "💰 经济要闻", "tag-economy"), ("tech", "🔬 科技要闻", "tag-tech")]
     
     for col, (cat_key, cat_name, tag_class) in zip(news_cols, categories):
         with col:
             st.markdown(f"<div class='news-section-title'>{cat_name}</div>", unsafe_allow_html=True)
             for i, item in enumerate(news.get(cat_key, [])[:10], 1):
-                title = item['title'][:45] + '...' if len(item['title']) > 45 else item['title']
+                title = item['title'][:40] + '...' if len(item['title']) > 40 else item['title']
                 st.markdown(f"""
                 <div class='news-card'>
                     <div class='news-number'>{i:02d}</div>
                     <div class='news-title'>{title}</div>
-                    <div class='news-meta'>
-                        <span class='tag {tag_class}'>{cat_name[2:]}</span>
-                        {item.get('time', '')} · {item.get('source', '')}
-                    </div>
+                    <div class='news-meta'>{item.get('time', '')} · {item.get('source', '')}</div>
                 </div>
                 """, unsafe_allow_html=True)
     
     st.markdown(f"""
     <div class='footer-info'>
         数据更新: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
-        数据来源: 新浪财经 / 东方财富 / 腾讯财经 / 财联社 · 多源聚合智能择优
+        数据来源: 新浪财经 / 东方财富 / 金十数据 / Reddit / Hacker News
     </div>
     """, unsafe_allow_html=True)
 
@@ -923,18 +958,15 @@ else:
     
     if st.session_state.watchlist:
         cols = st.columns(3)
-        
         for i, (code, info) in enumerate(st.session_state.watchlist.items()):
             data = get_stock_data(code, info["market"])
-            
             if data:
                 with cols[i % 3]:
                     change_class = "up" if data["change_pct"] > 0 else ("down" if data["change_pct"] < 0 else "neutral")
                     change_symbol = "+" if data["change_pct"] > 0 else ""
-                    
                     st.markdown(f"""
                     <div class='stock-card'>
-                        <div style='display: flex; justify-content: space-between; align-items: center;'>
+                        <div style='display: flex; justify-content: space-between;'>
                             <div class='stock-name'>{data['name']}</div>
                             <div class='stock-code'>{data['code']}</div>
                         </div>
@@ -942,29 +974,16 @@ else:
                         <div class='index-change {change_class}' style='margin-bottom: 16px;'>
                             {change_symbol}{data['change_amt']:.2f} ({change_symbol}{data['change_pct']:.2f}%)
                         </div>
-                        <div class='stock-detail'>
-                            <span class='detail-label'>成交量</span>
-                            <span class='detail-value'>{data['volume']:.2f} 万手</span>
-                        </div>
-                        <div class='stock-detail'>
-                            <span class='detail-label'>成交额</span>
-                            <span class='detail-value'>{data['amount']:.2f} 亿</span>
-                        </div>
-                        <div class='stock-detail'>
-                            <span class='detail-label'>换手率</span>
-                            <span class='detail-value'>{data['turnover']:.2f}%</span>
-                        </div>
-                        <div class='stock-detail'>
-                            <span class='detail-label'>最高 / 最低</span>
-                            <span class='detail-value'>{data['high']:.2f} / {data['low']:.2f}</span>
-                        </div>
+                        <div class='stock-detail'><span class='detail-label'>成交量</span><span class='detail-value'>{data['volume']:.2f} 万手</span></div>
+                        <div class='stock-detail'><span class='detail-label'>成交额</span><span class='detail-value'>{data['amount']:.2f} 亿</span></div>
+                        <div class='stock-detail'><span class='detail-label'>换手率</span><span class='detail-value'>{data['turnover']:.2f}%</span></div>
+                        <div class='stock-detail'><span class='detail-label'>最高/最低</span><span class='detail-value'>{data['high']:.2f} / {data['low']:.2f}</span></div>
                     </div>
                     """, unsafe_allow_html=True)
                     
                     with st.expander("报警设置"):
                         if code not in st.session_state.alerts:
-                            st.session_state.alerts[code] = {"price_low": 0, "price_high": 0, "change_low": -10, "change_high": 10}
-                        
+                            st.session_state.alerts[code] = {"price_low": 0, "price_high": 0}
                         alert = st.session_state.alerts[code]
                         c1, c2 = st.columns(2)
                         with c1:
@@ -980,16 +999,14 @@ else:
         """, unsafe_allow_html=True)
         
         st.markdown("<div class='section-header'>热门股票</div>", unsafe_allow_html=True)
-        
         hot_stocks = [
             {"code": "301165", "name": "锐捷网络", "market": "sz"},
             {"code": "300750", "name": "宁德时代", "market": "sz"},
             {"code": "600519", "name": "贵州茅台", "market": "sh"},
-            {"code": "000858", "name": "五粮液", "market": "sz"},
             {"code": "002475", "name": "立讯精密", "market": "sz"},
             {"code": "300059", "name": "东方财富", "market": "sz"},
+            {"code": "000858", "name": "五粮液", "market": "sz"},
         ]
-        
         cols = st.columns(3)
         for i, stock in enumerate(hot_stocks):
             with cols[i % 3]:
