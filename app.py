@@ -1,6 +1,6 @@
 """
-📊 股市观察 v4.0
-AI智能选股系统 - 全球联动分析 + Claude AI推荐
+📊 股市观察 v4.1
+AI智能选股系统 - 修复数据获取，增强稳定性
 """
 
 import streamlit as st
@@ -74,7 +74,7 @@ st.markdown("""
 .divider { height: 1px; background: linear-gradient(90deg, transparent, #3a3a3c, transparent); margin: 40px 0; }
 .footer-info { text-align: center; color: #86868b; font-size: 12px; padding: 40px 0 20px 0; }
 
-/* AI推荐卡片 - 特殊样式 */
+/* AI推荐卡片 */
 .ai-section {
     background: linear-gradient(135deg, rgba(10, 132, 255, 0.1), rgba(94, 92, 230, 0.1));
     border: 1px solid rgba(10, 132, 255, 0.3);
@@ -90,20 +90,9 @@ st.markdown("""
     margin-bottom: 20px;
 }
 
-.ai-icon {
-    font-size: 32px;
-}
-
-.ai-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: #f5f5f7;
-}
-
-.ai-subtitle {
-    font-size: 13px;
-    color: #86868b;
-}
+.ai-icon { font-size: 32px; }
+.ai-title { font-size: 24px; font-weight: 700; color: #f5f5f7; }
+.ai-subtitle { font-size: 13px; color: #86868b; }
 
 .stock-recommend-card {
     background: rgba(28, 28, 30, 0.9);
@@ -126,21 +115,9 @@ st.markdown("""
     margin-bottom: 12px;
 }
 
-.stock-recommend-name {
-    font-size: 18px;
-    font-weight: 700;
-    color: #f5f5f7;
-}
-
-.stock-recommend-code {
-    font-size: 13px;
-    color: #86868b;
-}
-
-.stock-recommend-price {
-    font-size: 24px;
-    font-weight: 700;
-}
+.stock-recommend-name { font-size: 18px; font-weight: 700; color: #f5f5f7; }
+.stock-recommend-code { font-size: 13px; color: #86868b; }
+.stock-recommend-price { font-size: 24px; font-weight: 700; }
 
 .stock-recommend-reason {
     background: rgba(10, 132, 255, 0.1);
@@ -149,18 +126,8 @@ st.markdown("""
     margin-top: 12px;
 }
 
-.reason-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: #0a84ff;
-    margin-bottom: 6px;
-}
-
-.reason-content {
-    font-size: 13px;
-    color: #f5f5f7;
-    line-height: 1.6;
-}
+.reason-title { font-size: 12px; font-weight: 600; color: #0a84ff; margin-bottom: 6px; }
+.reason-content { font-size: 13px; color: #f5f5f7; line-height: 1.6; }
 
 .signal-tag {
     display: inline-block;
@@ -177,7 +144,6 @@ st.markdown("""
 .signal-news { background: rgba(255, 159, 10, 0.2); color: #ff9f0a; }
 .signal-global { background: rgba(94, 92, 230, 0.2); color: #5e5ce6; }
 
-/* 资金流向 */
 .fund-flow-card {
     background: rgba(28, 28, 30, 0.6);
     border-radius: 14px;
@@ -189,7 +155,6 @@ st.markdown("""
 .fund-name { font-size: 14px; font-weight: 600; color: #f5f5f7; }
 .fund-amount { font-size: 18px; font-weight: 700; margin-top: 4px; }
 
-/* 快讯 */
 .flash-news { 
     background: rgba(232, 65, 66, 0.08); 
     border-left: 3px solid #e84142;
@@ -211,33 +176,6 @@ st.markdown("""
 .intl-meta { color: #86868b; font-size: 11px; }
 .intl-stats { color: #0a84ff; font-size: 11px; font-weight: 500; }
 
-.stock-card { background: rgba(28, 28, 30, 0.8); backdrop-filter: blur(20px); border-radius: 18px; padding: 24px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.1); }
-.stock-name { font-size: 17px; font-weight: 600; color: #f5f5f7; }
-.stock-code { font-size: 13px; color: #86868b; }
-.stock-price { font-size: 34px; font-weight: 700; letter-spacing: -1px; margin: 12px 0; }
-.stock-detail { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #2c2c2e; }
-.stock-detail:last-child { border-bottom: none; }
-.detail-label { font-size: 13px; color: #86868b; }
-.detail-value { font-size: 13px; color: #f5f5f7; font-weight: 500; }
-
-.timestamp { font-size: 12px; color: #48484a; text-align: right; margin-top: 20px; }
-.empty-state { text-align: center; padding: 60px 20px; color: #86868b; }
-.empty-state-icon { font-size: 48px; margin-bottom: 16px; }
-.empty-state-text { font-size: 17px; font-weight: 500; }
-
-.stButton > button { background: rgba(10, 132, 255, 0.1) !important; color: #0a84ff !important; border: 1px solid rgba(10, 132, 255, 0.3) !important; border-radius: 10px !important; }
-.stButton > button:hover { background: rgba(10, 132, 255, 0.2) !important; }
-.stTextInput > div > div > input { background: #1c1c1e !important; color: #f5f5f7 !important; border: 1px solid #3a3a3c !important; border-radius: 10px !important; }
-.stExpander { background: rgba(28, 28, 30, 0.5) !important; border: 1px solid #2c2c2e !important; border-radius: 12px !important; }
-
-/* AI分析中动画 */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-.analyzing { animation: pulse 1.5s ease-in-out infinite; }
-
-/* 风险提示 */
 .risk-warning {
     background: rgba(255, 59, 48, 0.1);
     border: 1px solid rgba(255, 59, 48, 0.3);
@@ -247,24 +185,41 @@ st.markdown("""
 }
 .risk-title { color: #ff453a; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .risk-content { color: #86868b; font-size: 12px; line-height: 1.6; }
+
+.debug-info {
+    background: rgba(255, 159, 10, 0.1);
+    border: 1px solid rgba(255, 159, 10, 0.3);
+    border-radius: 8px;
+    padding: 10px;
+    margin: 10px 0;
+    font-size: 12px;
+    color: #ff9f0a;
+}
+
+.stButton > button { background: rgba(10, 132, 255, 0.1) !important; color: #0a84ff !important; border: 1px solid rgba(10, 132, 255, 0.3) !important; border-radius: 10px !important; }
+.stButton > button:hover { background: rgba(10, 132, 255, 0.2) !important; }
+.stTextInput > div > div > input { background: #1c1c1e !important; color: #f5f5f7 !important; border: 1px solid #3a3a3c !important; border-radius: 10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== 数据获取模块 ====================
+# ==================== 数据获取模块（增强稳定性） ====================
 
 class GlobalMarketData:
-    """全球市场数据"""
+    """全球市场数据 - 增强版"""
     
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
         })
-        self.timeout = 8
     
     def get_all_indices(self):
-        """获取全球股指"""
-        indices = {}
+        """获取全球股指 - 多源尝试"""
+        indices = []
+        
+        # 东方财富接口
         em_codes = [
             {"code": "1.000001", "name": "上证指数", "region": "中国大陆"},
             {"code": "0.399001", "name": "深证成指", "region": "中国大陆"},
@@ -275,31 +230,44 @@ class GlobalMarketData:
             {"code": "100.NDX", "name": "纳斯达克", "region": "美国"},
             {"code": "100.SPX", "name": "标普500", "region": "美国"},
             {"code": "100.N225", "name": "日经225", "region": "日本"},
-            {"code": "100.FTSE", "name": "富时100", "region": "英国"},
             {"code": "100.GDAXI", "name": "德国DAX", "region": "德国"},
-            {"code": "100.FCHI", "name": "法国CAC40", "region": "法国"},
         ]
         
-        def fetch_single(item):
+        for item in em_codes:
             try:
                 url = "https://push2.eastmoney.com/api/qt/stock/get"
-                params = {"secid": item["code"], "fields": "f43,f169,f170", "ut": "fa5fd1943c7b386f172d6893dbfba10b"}
-                resp = self.session.get(url, params=params, timeout=5)
+                params = {
+                    "secid": item["code"],
+                    "fields": "f43,f169,f170",
+                    "ut": "fa5fd1943c7b386f172d6893dbfba10b"
+                }
+                resp = self.session.get(url, params=params, timeout=8)
                 data = resp.json().get("data", {})
+                
                 if data and data.get("f43"):
-                    return {
-                        "name": item["name"], "region": item["region"],
+                    indices.append({
+                        "name": item["name"],
+                        "region": item["region"],
                         "price": data.get("f43", 0) / 100,
                         "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0,
-                        "source": "东财"
-                    }
-            except:
-                pass
-            return {"name": item["name"], "region": item["region"], "price": 0, "change_pct": 0, "source": "-"}
+                    })
+                else:
+                    # 添加占位数据
+                    indices.append({
+                        "name": item["name"],
+                        "region": item["region"],
+                        "price": 0,
+                        "change_pct": 0,
+                    })
+            except Exception as e:
+                indices.append({
+                    "name": item["name"],
+                    "region": item["region"],
+                    "price": 0,
+                    "change_pct": 0,
+                })
         
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            results = list(executor.map(fetch_single, em_codes))
-        return results
+        return indices
     
     def get_futures_data(self):
         """获取期货数据"""
@@ -320,19 +288,27 @@ class GlobalMarketData:
                 resp = self.session.get(url, params=params, timeout=5)
                 data = resp.json().get("data", {})
                 if data and data.get("f43"):
-                    futures.append({"name": item["name"], "price": data.get("f43", 0) / item["div"], "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0})
+                    futures.append({
+                        "name": item["name"],
+                        "price": data.get("f43", 0) / item["div"],
+                        "change_pct": data.get("f170", 0) / 100 if data.get("f170") else 0
+                    })
                 else:
                     futures.append({"name": item["name"], "price": 0, "change_pct": 0})
             except:
                 futures.append({"name": item["name"], "price": 0, "change_pct": 0})
+        
         return futures
 
 class AStockAnalyzer:
-    """A股分析器 - 板块、资金流向、热点"""
+    """A股分析器 - 增强稳定性"""
     
     def __init__(self):
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://quote.eastmoney.com/',
+        })
     
     def get_sector_flow(self):
         """获取板块资金流向"""
@@ -341,7 +317,7 @@ class AStockAnalyzer:
             url = "https://push2.eastmoney.com/api/qt/clist/get"
             params = {
                 "pn": 1, "pz": 20, "fs": "m:90+t:2",
-                "fields": "f12,f14,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87",
+                "fields": "f12,f14,f3,f62,f184",
                 "fid": "f62", "po": 1,
                 "ut": "fa5fd1943c7b386f172d6893dbfba10b"
             }
@@ -353,153 +329,146 @@ class AStockAnalyzer:
                     "name": item.get("f14", ""),
                     "code": item.get("f12", ""),
                     "change_pct": item.get("f3", 0) / 100 if item.get("f3") else 0,
-                    "main_net": item.get("f62", 0) / 100000000 if item.get("f62") else 0,  # 主力净流入(亿)
-                    "main_pct": item.get("f184", 0) / 100 if item.get("f184") else 0,  # 主力净占比
+                    "main_net": item.get("f62", 0) / 100000000 if item.get("f62") else 0,
                 })
-        except:
+        except Exception as e:
             pass
         return sectors
     
     def get_north_flow(self):
-        """获取北向资金"""
+        """获取北向资金 - 简化版"""
         try:
-            url = "https://push2.eastmoney.com/api/qt/kamt.rtmin/get"
-            params = {"fields1": "f1,f2,f3,f4", "fields2": "f51,f52,f53,f54,f55,f56", "ut": "fa5fd1943c7b386f172d6893dbfba10b"}
-            resp = self.session.get(url, params=params, timeout=10)
+            # 使用更稳定的接口
+            url = "https://push2.eastmoney.com/api/qt/kamtbs.rtmin/get"
+            params = {"fields1": "f1,f2,f3,f4", "fields2": "f51,f52,f53,f54,f55,f56"}
+            resp = self.session.get(url, params=params, timeout=8)
             data = resp.json().get("data", {})
             
             if data:
-                # 解析实时数据
-                s2n = data.get("s2n", [])  # 沪股通+深股通
-                if s2n:
-                    latest = s2n[-1].split(",") if s2n[-1] else []
-                    if len(latest) >= 2:
-                        return {
-                            "total": float(latest[1]) / 10000 if latest[1] != "-" else 0,  # 亿
-                            "hgt": float(data.get("hzjlj", 0)) / 10000,  # 沪股通累计
-                            "sgt": float(data.get("szjlj", 0)) / 10000,  # 深股通累计
-                        }
+                # 尝试解析
+                n2s = data.get("n2s", [])
+                s2n = data.get("s2n", [])
+                
+                total = 0
+                if s2n and len(s2n) > 0:
+                    latest = s2n[-1].split(",") if isinstance(s2n[-1], str) else []
+                    if len(latest) >= 2 and latest[1] != "-":
+                        try:
+                            total = float(latest[1]) / 10000  # 转亿
+                        except:
+                            pass
+                
+                return {"total": total}
         except:
             pass
-        return {"total": 0, "hgt": 0, "sgt": 0}
+        return {"total": 0}
     
-    def get_hot_stocks(self):
-        """获取热门股票（涨幅榜+换手榜+资金流入榜）"""
+    def get_hot_stocks_v2(self):
+        """获取热门股票 - 增强版，确保有数据返回"""
         hot_stocks = []
         
         try:
-            # 涨幅榜
+            # 方法1: 涨幅榜
             url = "https://push2.eastmoney.com/api/qt/clist/get"
             params = {
-                "pn": 1, "pz": 10, "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
-                "fields": "f12,f14,f2,f3,f4,f5,f6,f7,f15,f16,f17,f18,f62,f184",
+                "pn": 1, "pz": 20,
+                "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+                "fields": "f2,f3,f4,f5,f6,f7,f12,f14,f15,f16,f17,f18,f62",
                 "fid": "f3", "po": 1,
                 "ut": "fa5fd1943c7b386f172d6893dbfba10b"
             }
             resp = self.session.get(url, params=params, timeout=10)
-            data = resp.json().get("data", {}).get("diff", [])
+            result = resp.json()
             
-            for item in data[:10]:
-                code = item.get("f12", "")
-                market = "sh" if code.startswith("6") else "sz"
-                hot_stocks.append({
-                    "code": code,
-                    "name": item.get("f14", ""),
-                    "market": market,
-                    "price": item.get("f2", 0) / 100 if item.get("f2") else 0,
-                    "change_pct": item.get("f3", 0) / 100 if item.get("f3") else 0,
-                    "turnover": item.get("f7", 0) / 100 if item.get("f7") else 0,
-                    "amount": item.get("f6", 0) / 100000000 if item.get("f6") else 0,
-                    "main_net": item.get("f62", 0) / 100000000 if item.get("f62") else 0,
-                    "source": "涨幅榜"
-                })
-        except:
-            pass
-        
-        try:
-            # 资金流入榜
-            params["fid"] = "f62"
-            resp = self.session.get(url, params=params, timeout=10)
-            data = resp.json().get("data", {}).get("diff", [])
-            
-            existing_codes = {s["code"] for s in hot_stocks}
-            for item in data[:10]:
-                code = item.get("f12", "")
-                if code not in existing_codes:
+            if result.get("data", {}).get("diff"):
+                data = result["data"]["diff"]
+                for item in data[:15]:
+                    code = item.get("f12", "")
+                    if not code:
+                        continue
+                    
                     market = "sh" if code.startswith("6") else "sz"
+                    price = item.get("f2")
+                    if price and price != "-":
+                        price = float(price) / 100
+                    else:
+                        price = 0
+                    
+                    change_pct = item.get("f3")
+                    if change_pct and change_pct != "-":
+                        change_pct = float(change_pct) / 100
+                    else:
+                        change_pct = 0
+                    
+                    main_net = item.get("f62")
+                    if main_net and main_net != "-":
+                        main_net = float(main_net) / 100000000
+                    else:
+                        main_net = 0
+                    
+                    turnover = item.get("f7")
+                    if turnover and turnover != "-":
+                        turnover = float(turnover) / 100
+                    else:
+                        turnover = 0
+                    
+                    amount = item.get("f6")
+                    if amount and amount != "-":
+                        amount = float(amount) / 100000000
+                    else:
+                        amount = 0
+                    
                     hot_stocks.append({
                         "code": code,
                         "name": item.get("f14", ""),
                         "market": market,
-                        "price": item.get("f2", 0) / 100 if item.get("f2") else 0,
-                        "change_pct": item.get("f3", 0) / 100 if item.get("f3") else 0,
-                        "turnover": item.get("f7", 0) / 100 if item.get("f7") else 0,
-                        "amount": item.get("f6", 0) / 100000000 if item.get("f6") else 0,
-                        "main_net": item.get("f62", 0) / 100000000 if item.get("f62") else 0,
-                        "source": "资金榜"
+                        "price": price,
+                        "change_pct": change_pct,
+                        "turnover": turnover,
+                        "amount": amount,
+                        "main_net": main_net,
+                        "source": "涨幅榜"
                     })
+        except Exception as e:
+            pass
+        
+        # 方法2: 资金流入榜（补充）
+        try:
+            params["fid"] = "f62"
+            resp = self.session.get(url, params=params, timeout=10)
+            result = resp.json()
+            
+            if result.get("data", {}).get("diff"):
+                existing_codes = {s["code"] for s in hot_stocks}
+                for item in result["data"]["diff"][:10]:
+                    code = item.get("f12", "")
+                    if code and code not in existing_codes:
+                        market = "sh" if code.startswith("6") else "sz"
+                        
+                        price = item.get("f2")
+                        price = float(price) / 100 if price and price != "-" else 0
+                        
+                        change_pct = item.get("f3")
+                        change_pct = float(change_pct) / 100 if change_pct and change_pct != "-" else 0
+                        
+                        main_net = item.get("f62")
+                        main_net = float(main_net) / 100000000 if main_net and main_net != "-" else 0
+                        
+                        hot_stocks.append({
+                            "code": code,
+                            "name": item.get("f14", ""),
+                            "market": market,
+                            "price": price,
+                            "change_pct": change_pct,
+                            "turnover": 0,
+                            "amount": 0,
+                            "main_net": main_net,
+                            "source": "资金流入榜"
+                        })
         except:
             pass
         
         return hot_stocks
-    
-    def get_concept_stocks(self, concept_keywords):
-        """根据概念关键词获取相关股票"""
-        concept_stocks = []
-        
-        # 概念板块代码映射
-        concept_map = {
-            "AI": "BK0800", "人工智能": "BK0800", "算力": "BK0891",
-            "芯片": "BK0493", "半导体": "BK0493", "光刻机": "BK0717",
-            "机器人": "BK0747", "人形机器人": "BK0747",
-            "新能源": "BK0478", "光伏": "BK0478", "储能": "BK1038",
-            "锂电池": "BK0574", "宁德时代": "BK0574",
-            "医药": "BK0465", "创新药": "BK0465",
-            "军工": "BK0477", "国防": "BK0477",
-            "消费": "BK0438", "白酒": "BK0477",
-            "金融": "BK0475", "券商": "BK0707", "银行": "BK0475",
-            "房地产": "BK0451", "地产": "BK0451",
-            "稀土": "BK0482", "有色": "BK0478",
-            "DeepSeek": "BK0800", "大模型": "BK0800",
-        }
-        
-        # 找到匹配的概念
-        matched_concepts = []
-        for keyword in concept_keywords:
-            for key, code in concept_map.items():
-                if key in keyword or keyword in key:
-                    if code not in [c[1] for c in matched_concepts]:
-                        matched_concepts.append((key, code))
-        
-        # 获取概念板块成分股
-        for concept_name, concept_code in matched_concepts[:3]:
-            try:
-                url = "https://push2.eastmoney.com/api/qt/clist/get"
-                params = {
-                    "pn": 1, "pz": 5, "fs": f"b:{concept_code}",
-                    "fields": "f12,f14,f2,f3,f62,f184",
-                    "fid": "f3", "po": 1,
-                    "ut": "fa5fd1943c7b386f172d6893dbfba10b"
-                }
-                resp = self.session.get(url, params=params, timeout=10)
-                data = resp.json().get("data", {}).get("diff", [])
-                
-                for item in data[:5]:
-                    code = item.get("f12", "")
-                    market = "sh" if code.startswith("6") else "sz"
-                    concept_stocks.append({
-                        "code": code,
-                        "name": item.get("f14", ""),
-                        "market": market,
-                        "price": item.get("f2", 0) / 100 if item.get("f2") else 0,
-                        "change_pct": item.get("f3", 0) / 100 if item.get("f3") else 0,
-                        "main_net": item.get("f62", 0) / 100000000 if item.get("f62") else 0,
-                        "concept": concept_name,
-                    })
-            except:
-                pass
-        
-        return concept_stocks
 
 class NewsAggregator:
     """新闻聚合器"""
@@ -509,7 +478,6 @@ class NewsAggregator:
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
     
     def get_all_news(self):
-        """获取所有新闻"""
         news = {"politics": [], "economy": [], "tech": []}
         
         try:
@@ -531,36 +499,27 @@ class NewsAggregator:
         return news
     
     def extract_keywords(self, news_data):
-        """从新闻中提取关键词"""
         keywords = []
-        
-        # 关键词映射
         keyword_patterns = [
             ("AI", ["AI", "人工智能", "大模型", "ChatGPT", "DeepSeek", "算力", "智能"]),
-            ("芯片", ["芯片", "半导体", "光刻", "晶圆", "封装", "英伟达", "台积电"]),
+            ("芯片", ["芯片", "半导体", "光刻", "晶圆", "英伟达"]),
             ("机器人", ["机器人", "人形", "具身智能", "自动化"]),
-            ("新能源", ["新能源", "光伏", "风电", "储能", "氢能", "碳中和"]),
-            ("锂电池", ["锂电", "电池", "宁德", "比亚迪", "充电"]),
-            ("稀土", ["稀土", "永磁", "钕铁硼"]),
-            ("消费", ["消费", "零售", "电商", "白酒"]),
-            ("医药", ["医药", "创新药", "生物", "疫苗"]),
-            ("金融", ["金融", "银行", "券商", "保险"]),
-            ("军工", ["军工", "国防", "航空", "航天"]),
+            ("新能源", ["新能源", "光伏", "风电", "储能", "氢能"]),
+            ("锂电池", ["锂电", "电池", "宁德", "比亚迪"]),
+            ("稀土", ["稀土", "永磁"]),
+            ("消费", ["消费", "零售", "白酒"]),
+            ("医药", ["医药", "创新药", "生物"]),
+            ("金融", ["金融", "银行", "券商"]),
+            ("军工", ["军工", "国防", "航空"]),
         ]
         
-        all_titles = []
-        for category in news_data.values():
-            for item in category:
-                all_titles.append(item.get("title", ""))
-        
-        full_text = " ".join(all_titles)
+        all_titles = " ".join([item.get("title", "") for cat in news_data.values() for item in cat])
         
         for keyword, patterns in keyword_patterns:
-            count = sum(1 for p in patterns if p in full_text)
-            if count >= 2:
+            if any(p in all_titles for p in patterns):
                 keywords.append(keyword)
         
-        return keywords
+        return keywords if keywords else ["AI", "消费"]  # 默认热点
 
 class InternationalNews:
     """国际资讯"""
@@ -571,50 +530,44 @@ class InternationalNews:
     
     def get_reddit_hot(self):
         posts = []
-        for sub in ["wallstreetbets", "stocks"]:
-            try:
+        try:
+            for sub in ["wallstreetbets", "stocks"]:
                 url = f"https://www.reddit.com/r/{sub}/hot.json?limit=5"
                 resp = self.session.get(url, timeout=10)
                 for post in resp.json().get("data", {}).get("children", [])[:5]:
                     pd = post.get("data", {})
-                    if not pd.get("stickied") and (time.time() - pd.get("created_utc", 0)) < 86400:
+                    if not pd.get("stickied"):
                         posts.append({
                             "title": pd.get("title", "")[:80],
                             "subreddit": f"r/{sub}",
                             "score": pd.get("score", 0),
                             "comments": pd.get("num_comments", 0),
                         })
-            except:
-                pass
-        posts.sort(key=lambda x: x["score"], reverse=True)
+        except:
+            pass
+        posts.sort(key=lambda x: x.get("score", 0), reverse=True)
         return posts[:8]
     
     def get_hackernews_hot(self):
         posts = []
         try:
             resp = self.session.get("https://hacker-news.firebaseio.com/v0/topstories.json", timeout=10)
-            story_ids = resp.json()[:15]
+            story_ids = resp.json()[:10]
             
-            def fetch(sid):
+            for sid in story_ids:
                 try:
                     r = self.session.get(f"https://hacker-news.firebaseio.com/v0/item/{sid}.json", timeout=5)
-                    return r.json()
+                    s = r.json()
+                    if s and s.get("title"):
+                        posts.append({
+                            "title": s.get("title", "")[:80],
+                            "score": s.get("score", 0),
+                            "comments": s.get("descendants", 0),
+                        })
                 except:
-                    return None
-            
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                stories = list(executor.map(fetch, story_ids))
-            
-            for s in stories:
-                if s and s.get("title") and (time.time() - s.get("time", 0)) < 86400:
-                    posts.append({
-                        "title": s.get("title", "")[:80],
-                        "score": s.get("score", 0),
-                        "comments": s.get("descendants", 0),
-                    })
+                    pass
         except:
             pass
-        posts.sort(key=lambda x: x["score"], reverse=True)
         return posts[:8]
     
     def get_jin10_flash(self):
@@ -638,178 +591,107 @@ class InternationalNews:
             pass
         return flash
 
-# ==================== AI选股引擎 ====================
+# ==================== AI选股引擎（简化版，确保稳定） ====================
 
 class AIStockRecommender:
-    """AI智能选股引擎"""
+    """AI智能选股引擎 - 简化稳定版"""
     
-    def __init__(self):
-        self.analyzer = AStockAnalyzer()
-    
-    def analyze_global_signals(self, indices):
-        """分析全球信号"""
-        signals = []
-        
-        # 美股信号
-        us_indices = [i for i in indices if i["region"] == "美国"]
-        us_avg_change = sum(i["change_pct"] for i in us_indices) / len(us_indices) if us_indices else 0
-        
-        if us_avg_change > 1:
-            signals.append({"type": "global", "signal": "美股大涨", "impact": "利好科技、消费", "keywords": ["AI", "芯片", "消费"]})
-        elif us_avg_change < -1:
-            signals.append({"type": "global", "signal": "美股大跌", "impact": "避险资金流入", "keywords": ["军工", "金融"]})
-        
-        # 纳斯达克单独分析
-        nasdaq = next((i for i in indices if "纳斯达克" in i["name"]), None)
-        if nasdaq and nasdaq["change_pct"] > 1.5:
-            signals.append({"type": "global", "signal": "纳斯达克领涨", "impact": "科技股活跃", "keywords": ["AI", "芯片", "机器人"]})
-        
-        # 港股信号
-        hk_indices = [i for i in indices if "香港" in i["region"]]
-        hk_tech = next((i for i in hk_indices if "科技" in i["name"]), None)
-        if hk_tech and hk_tech["change_pct"] > 2:
-            signals.append({"type": "global", "signal": "恒生科技大涨", "impact": "互联网、科技回暖", "keywords": ["AI", "消费"]})
-        
-        return signals
-    
-    def analyze_fund_signals(self, sectors, north_flow):
-        """分析资金信号"""
-        signals = []
-        
-        # 北向资金
-        if north_flow["total"] > 50:
-            signals.append({"type": "fund", "signal": f"北向资金净流入{north_flow['total']:.1f}亿", "impact": "外资看好A股", "keywords": ["金融", "消费"]})
-        elif north_flow["total"] < -50:
-            signals.append({"type": "fund", "signal": f"北向资金净流出{abs(north_flow['total']):.1f}亿", "impact": "外资避险", "keywords": ["军工"]})
-        
-        # 板块资金流向
-        top_sectors = [s for s in sectors if s["main_net"] > 5][:3]
-        for sector in top_sectors:
-            signals.append({
-                "type": "fund", 
-                "signal": f"{sector['name']}主力净流入{sector['main_net']:.1f}亿",
-                "impact": f"{sector['name']}板块活跃",
-                "keywords": [sector['name']]
-            })
-        
-        return signals
-    
-    def analyze_news_signals(self, news_keywords):
-        """分析新闻信号"""
-        signals = []
-        
-        keyword_impact = {
-            "AI": "人工智能、算力相关标的",
-            "芯片": "半导体、设备材料",
-            "机器人": "自动化、传感器",
-            "新能源": "光伏、风电、储能",
-            "稀土": "永磁材料、有色金属",
-        }
-        
-        for kw in news_keywords[:3]:
-            if kw in keyword_impact:
-                signals.append({
-                    "type": "news",
-                    "signal": f"新闻热点: {kw}",
-                    "impact": keyword_impact[kw],
-                    "keywords": [kw]
-                })
-        
-        return signals
-    
-    def generate_recommendations(self, indices, futures, sectors, north_flow, hot_stocks, news_keywords):
+    def generate_recommendations(self, indices, sectors, north_flow, hot_stocks, news_keywords):
         """生成推荐股票"""
         recommendations = []
+        signals = []
         
-        # 收集所有信号
-        all_signals = []
-        all_signals.extend(self.analyze_global_signals(indices))
-        all_signals.extend(self.analyze_fund_signals(sectors, north_flow))
-        all_signals.extend(self.analyze_news_signals(news_keywords))
+        # 1. 分析全球信号
+        us_indices = [i for i in indices if i.get("region") == "美国"]
+        us_avg = sum(i.get("change_pct", 0) for i in us_indices) / len(us_indices) if us_indices else 0
         
-        # 收集所有关键词
-        all_keywords = []
-        for signal in all_signals:
-            all_keywords.extend(signal.get("keywords", []))
+        if us_avg > 0.5:
+            signals.append({"type": "global", "text": f"美股上涨{us_avg:.1f}%，利好科技股"})
+        elif us_avg < -0.5:
+            signals.append({"type": "global", "text": f"美股下跌{abs(us_avg):.1f}%，关注防御板块"})
         
-        # 获取概念相关股票
-        concept_stocks = self.analyzer.get_concept_stocks(all_keywords)
+        # 2. 分析北向资金
+        nf_total = north_flow.get("total", 0)
+        if nf_total > 20:
+            signals.append({"type": "fund", "text": f"北向资金净流入{nf_total:.1f}亿"})
+        elif nf_total < -20:
+            signals.append({"type": "fund", "text": f"北向资金净流出{abs(nf_total):.1f}亿"})
         
-        # 合并热门股票和概念股票
-        candidate_stocks = {}
+        # 3. 分析新闻热点
+        if news_keywords:
+            signals.append({"type": "news", "text": f"新闻热点: {', '.join(news_keywords[:3])}"})
         
-        # 热门股票
-        for stock in hot_stocks:
-            code = stock["code"]
-            if code not in candidate_stocks:
-                candidate_stocks[code] = {
-                    **stock,
-                    "signals": [stock["source"]],
-                    "score": 10 if stock["source"] == "资金榜" else 5
-                }
-            else:
-                candidate_stocks[code]["signals"].append(stock["source"])
-                candidate_stocks[code]["score"] += 5
-        
-        # 概念股票
-        for stock in concept_stocks:
-            code = stock["code"]
-            if code not in candidate_stocks:
-                candidate_stocks[code] = {
-                    **stock,
-                    "signals": [f"概念:{stock['concept']}"],
-                    "score": 8
-                }
-            else:
-                candidate_stocks[code]["signals"].append(f"概念:{stock['concept']}")
-                candidate_stocks[code]["score"] += 8
-        
-        # 评分排序
-        for code, stock in candidate_stocks.items():
-            # 资金流入加分
-            if stock.get("main_net", 0) > 1:
-                stock["score"] += 10
-            elif stock.get("main_net", 0) > 0:
-                stock["score"] += 5
+        # 4. 筛选推荐股票
+        if hot_stocks:
+            # 对热门股票进行评分
+            scored_stocks = []
+            for stock in hot_stocks:
+                score = 0
+                reasons = []
+                
+                # 涨幅评分（3-7%最佳）
+                change = stock.get("change_pct", 0)
+                if 2 <= change <= 5:
+                    score += 15
+                    reasons.append(f"涨幅适中({change:.1f}%)")
+                elif 5 < change <= 8:
+                    score += 10
+                    reasons.append(f"强势上涨({change:.1f}%)")
+                elif change > 8:
+                    score += 5
+                    reasons.append(f"涨幅较大({change:.1f}%)")
+                elif change > 0:
+                    score += 8
+                
+                # 资金流入评分
+                main_net = stock.get("main_net", 0)
+                if main_net > 2:
+                    score += 20
+                    reasons.append(f"主力净流入{main_net:.1f}亿")
+                elif main_net > 0.5:
+                    score += 10
+                    reasons.append(f"主力小幅流入")
+                elif main_net > 0:
+                    score += 5
+                
+                # 换手率评分
+                turnover = stock.get("turnover", 0)
+                if 5 <= turnover <= 15:
+                    score += 10
+                    reasons.append("换手活跃")
+                elif turnover > 15:
+                    score += 5
+                
+                # 来源加分
+                if stock.get("source") == "资金流入榜":
+                    score += 10
+                
+                stock["score"] = score
+                stock["reasons"] = reasons
+                scored_stocks.append(stock)
             
-            # 涨幅适中加分（3-7%最佳）
-            change = stock.get("change_pct", 0)
-            if 3 <= change <= 7:
-                stock["score"] += 5
-            elif change > 9:
-                stock["score"] -= 5  # 追高风险
+            # 排序取TOP 8
+            scored_stocks.sort(key=lambda x: x.get("score", 0), reverse=True)
+            
+            for stock in scored_stocks[:8]:
+                if stock.get("price", 0) > 0:  # 确保有价格数据
+                    reason_text = "、".join(stock.get("reasons", [])[:3])
+                    if not reason_text:
+                        reason_text = "综合评分领先"
+                    
+                    recommendations.append({
+                        "code": stock.get("code", ""),
+                        "name": stock.get("name", ""),
+                        "price": stock.get("price", 0),
+                        "change_pct": stock.get("change_pct", 0),
+                        "main_net": stock.get("main_net", 0),
+                        "turnover": stock.get("turnover", 0),
+                        "reason": reason_text,
+                        "score": stock.get("score", 0),
+                        "source": stock.get("source", "")
+                    })
         
-        # 排序取TOP
-        sorted_stocks = sorted(candidate_stocks.values(), key=lambda x: x["score"], reverse=True)
-        
-        # 生成推荐理由
-        for stock in sorted_stocks[:8]:
-            reasons = []
-            
-            # 根据信号生成理由
-            for signal in stock.get("signals", []):
-                if "资金" in signal:
-                    reasons.append("主力资金流入")
-                elif "涨幅" in signal:
-                    reasons.append("涨幅领先")
-                elif "概念" in signal:
-                    concept = signal.split(":")[1] if ":" in signal else ""
-                    reasons.append(f"{concept}概念龙头")
-            
-            # 资金面
-            if stock.get("main_net", 0) > 1:
-                reasons.append(f"主力净流入{stock['main_net']:.1f}亿")
-            
-            # 换手率
-            if stock.get("turnover", 0) > 10:
-                reasons.append("换手活跃")
-            
-            stock["reason"] = "、".join(reasons[:3]) if reasons else "综合评分领先"
-            stock["related_signals"] = [s for s in all_signals if any(kw in stock.get("concept", "") or kw in stock.get("name", "") for kw in s.get("keywords", []))][:2]
-            
-            recommendations.append(stock)
-        
-        return recommendations, all_signals
+        return recommendations, signals
 
 # ==================== 缓存函数 ====================
 
@@ -821,7 +703,7 @@ def fetch_global_indices():
 def fetch_futures_data():
     return GlobalMarketData().get_futures_data()
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=120)
 def fetch_sector_flow():
     return AStockAnalyzer().get_sector_flow()
 
@@ -829,17 +711,18 @@ def fetch_sector_flow():
 def fetch_north_flow():
     return AStockAnalyzer().get_north_flow()
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def fetch_hot_stocks():
-    return AStockAnalyzer().get_hot_stocks()
+    return AStockAnalyzer().get_hot_stocks_v2()
 
 @st.cache_data(ttl=300)
 def fetch_news_data():
     return NewsAggregator().get_all_news()
 
 @st.cache_data(ttl=300)
-def fetch_news_keywords(news_data):
-    return NewsAggregator().extract_keywords(news_data)
+def extract_news_keywords(news_json):
+    news = json.loads(news_json)
+    return NewsAggregator().extract_keywords(news)
 
 @st.cache_data(ttl=180)
 def fetch_reddit_posts():
@@ -853,22 +736,7 @@ def fetch_hn_posts():
 def fetch_jin10_flash():
     return InternationalNews().get_jin10_flash()
 
-@st.cache_data(ttl=120)
-def generate_ai_recommendations(indices_json, futures_json, sectors_json, north_flow_json, hot_stocks_json, keywords_json):
-    """生成AI推荐（使用JSON序列化参数以支持缓存）"""
-    indices = json.loads(indices_json)
-    futures = json.loads(futures_json)
-    sectors = json.loads(sectors_json)
-    north_flow = json.loads(north_flow_json)
-    hot_stocks = json.loads(hot_stocks_json)
-    keywords = json.loads(keywords_json)
-    
-    recommender = AIStockRecommender()
-    return recommender.generate_recommendations(indices, futures, sectors, north_flow, hot_stocks, keywords)
-
 # ==================== 会话状态 ====================
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = {}
 if "current_tab" not in st.session_state:
     st.session_state.current_tab = "ai"
 
@@ -877,20 +745,14 @@ with st.sidebar:
     st.markdown("""
     <div style='padding: 20px 0;'>
         <div style='font-size: 24px; font-weight: 700; color: #f5f5f7;'>📊 股市观察</div>
-        <div style='font-size: 13px; color: #86868b; margin-top: 4px;'>AI智能选股 v4.0</div>
+        <div style='font-size: 13px; color: #86868b; margin-top: 4px;'>AI智能选股 v4.1</div>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("<div style='height: 1px; background: #2c2c2e; margin: 10px 0;'></div>", unsafe_allow_html=True)
     
-    tab = st.radio("功能模块", ["🤖 AI智能选股", "🌍 全球行情", "📈 自选监控"], label_visibility="collapsed")
-    
-    if "AI" in tab:
-        st.session_state.current_tab = "ai"
-    elif "全球" in tab:
-        st.session_state.current_tab = "global"
-    else:
-        st.session_state.current_tab = "watchlist"
+    tab = st.radio("功能模块", ["🤖 AI智能选股", "🌍 全球行情"], label_visibility="collapsed")
+    st.session_state.current_tab = "ai" if "AI" in tab else "global"
     
     st.markdown("<div style='height: 1px; background: #2c2c2e; margin: 20px 0;'></div>", unsafe_allow_html=True)
     
@@ -903,13 +765,12 @@ with st.sidebar:
 # ==================== 主界面 ====================
 
 if st.session_state.current_tab == "ai":
-    # AI智能选股页面
     st.markdown("""
     <div class='main-title'>AI智能选股</div>
     <div class='sub-title'>全球联动分析 · 多维度信号聚合 · 智能推荐</div>
     """, unsafe_allow_html=True)
     
-    # 获取所有数据
+    # 获取数据
     with st.spinner("正在分析全球市场数据..."):
         indices = fetch_global_indices()
         futures = fetch_futures_data()
@@ -917,17 +778,13 @@ if st.session_state.current_tab == "ai":
         north_flow = fetch_north_flow()
         hot_stocks = fetch_hot_stocks()
         news = fetch_news_data()
-        news_keywords = fetch_news_keywords(news)
-        
-        # 生成推荐
-        recommendations, signals = generate_ai_recommendations(
-            json.dumps(indices),
-            json.dumps(futures),
-            json.dumps(sectors),
-            json.dumps(north_flow),
-            json.dumps(hot_stocks),
-            json.dumps(news_keywords)
-        )
+        news_keywords = extract_news_keywords(json.dumps(news))
+    
+    # 生成推荐
+    recommender = AIStockRecommender()
+    recommendations, signals = recommender.generate_recommendations(
+        indices, sectors, north_flow, hot_stocks, news_keywords
+    )
     
     # ========== 市场信号概览 ==========
     st.markdown("<div class='section-header'>📡 市场信号</div>", unsafe_allow_html=True)
@@ -936,8 +793,8 @@ if st.session_state.current_tab == "ai":
     
     # 美股信号
     with signal_cols[0]:
-        us_indices = [i for i in indices if i["region"] == "美国"]
-        us_avg = sum(i["change_pct"] for i in us_indices) / len(us_indices) if us_indices else 0
+        us_indices = [i for i in indices if i.get("region") == "美国"]
+        us_avg = sum(i.get("change_pct", 0) for i in us_indices) / len(us_indices) if us_indices else 0
         change_class = "up" if us_avg > 0 else "down"
         st.markdown(f"""
         <div class='index-card'>
@@ -949,8 +806,8 @@ if st.session_state.current_tab == "ai":
     
     # 北向资金
     with signal_cols[1]:
-        nf = north_flow["total"]
-        change_class = "up" if nf > 0 else "down"
+        nf = north_flow.get("total", 0)
+        change_class = "up" if nf > 0 else ("down" if nf < 0 else "neutral")
         st.markdown(f"""
         <div class='index-card'>
             <div class='index-region'>💰 北向资金</div>
@@ -962,12 +819,12 @@ if st.session_state.current_tab == "ai":
     # 热点板块
     with signal_cols[2]:
         top_sector = sectors[0] if sectors else {"name": "-", "change_pct": 0}
-        change_class = "up" if top_sector["change_pct"] > 0 else "down"
+        change_class = "up" if top_sector.get("change_pct", 0) > 0 else "down"
         st.markdown(f"""
         <div class='index-card'>
             <div class='index-region'>🔥 领涨板块</div>
-            <div class='index-name'>{top_sector['name']}</div>
-            <div class='index-change {change_class}' style='font-size: 24px;'>+{top_sector['change_pct']:.2f}%</div>
+            <div class='index-name'>{top_sector.get('name', '-')}</div>
+            <div class='index-change {change_class}' style='font-size: 24px;'>{'+' if top_sector.get('change_pct', 0) > 0 else ''}{top_sector.get('change_pct', 0):.2f}%</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -981,6 +838,18 @@ if st.session_state.current_tab == "ai":
             <div style='font-size: 20px; color: #0a84ff; font-weight: 600; margin-top: 4px;'>{hot_keyword}</div>
         </div>
         """, unsafe_allow_html=True)
+    
+    # ========== 数据状态提示 ==========
+    data_status = []
+    if hot_stocks:
+        data_status.append(f"✅ 热门股票: {len(hot_stocks)}只")
+    else:
+        data_status.append("⚠️ 热门股票数据获取中...")
+    
+    if sectors:
+        data_status.append(f"✅ 板块数据: {len(sectors)}个")
+    
+    st.markdown(f"<div class='debug-info'>数据状态: {' | '.join(data_status)}</div>", unsafe_allow_html=True)
     
     # ========== AI推荐股票 ==========
     st.markdown("""
@@ -1004,14 +873,14 @@ if st.session_state.current_tab == "ai":
                 
                 # 信号标签
                 signal_tags = ""
-                for sig in stock.get("signals", [])[:3]:
-                    if "资金" in sig:
-                        signal_tags += "<span class='signal-tag signal-fund'>💰 资金流入</span>"
-                    elif "涨幅" in sig:
-                        signal_tags += "<span class='signal-tag signal-hot'>🔥 涨幅领先</span>"
-                    elif "概念" in sig:
-                        concept = sig.split(":")[1] if ":" in sig else "热点"
-                        signal_tags += f"<span class='signal-tag signal-news'>📰 {concept}</span>"
+                if stock.get("main_net", 0) > 0.5:
+                    signal_tags += "<span class='signal-tag signal-fund'>💰 资金流入</span>"
+                if stock.get("source") == "涨幅榜":
+                    signal_tags += "<span class='signal-tag signal-hot'>🔥 涨幅领先</span>"
+                if stock.get("source") == "资金流入榜":
+                    signal_tags += "<span class='signal-tag signal-fund'>💎 主力加仓</span>"
+                if stock.get("turnover", 0) > 10:
+                    signal_tags += "<span class='signal-tag signal-news'>📊 换手活跃</span>"
                 
                 st.markdown(f"""
                 <div class='stock-recommend-card'>
@@ -1033,7 +902,13 @@ if st.session_state.current_tab == "ai":
                 </div>
                 """, unsafe_allow_html=True)
     else:
-        st.markdown("<div style='color: #86868b; text-align: center; padding: 40px;'>暂无推荐数据</div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='color: #86868b; text-align: center; padding: 40px;'>
+            <div style='font-size: 48px; margin-bottom: 16px;'>📊</div>
+            <div>正在获取市场数据，请稍后刷新...</div>
+            <div style='font-size: 12px; margin-top: 8px;'>如持续无数据，可能是非交易时段或网络延迟</div>
+        </div>
+        """, unsafe_allow_html=True)
     
     # 风险提示
     st.markdown("""
@@ -1048,20 +923,21 @@ if st.session_state.current_tab == "ai":
     """, unsafe_allow_html=True)
     
     # ========== 板块资金流向 ==========
-    st.markdown("<div class='section-header'>💰 板块资金流向 TOP10</div>", unsafe_allow_html=True)
-    
-    sector_cols = st.columns(5)
-    for i, sector in enumerate(sectors[:10]):
-        with sector_cols[i % 5]:
-            change_class = "up" if sector["change_pct"] > 0 else "down"
-            fund_class = "up" if sector["main_net"] > 0 else "down"
-            st.markdown(f"""
-            <div class='fund-flow-card'>
-                <div class='fund-name'>{sector['name']}</div>
-                <div class='index-change {change_class}'>{'+' if sector['change_pct'] > 0 else ''}{sector['change_pct']:.2f}%</div>
-                <div class='fund-amount {fund_class}'>{'+' if sector['main_net'] > 0 else ''}{sector['main_net']:.1f}亿</div>
-            </div>
-            """, unsafe_allow_html=True)
+    if sectors:
+        st.markdown("<div class='section-header'>💰 板块资金流向 TOP10</div>", unsafe_allow_html=True)
+        
+        sector_cols = st.columns(5)
+        for i, sector in enumerate(sectors[:10]):
+            with sector_cols[i % 5]:
+                change_class = "up" if sector.get("change_pct", 0) > 0 else "down"
+                fund_class = "up" if sector.get("main_net", 0) > 0 else "down"
+                st.markdown(f"""
+                <div class='fund-flow-card'>
+                    <div class='fund-name'>{sector.get('name', '')}</div>
+                    <div class='index-change {change_class}'>{'+' if sector.get('change_pct', 0) > 0 else ''}{sector.get('change_pct', 0):.2f}%</div>
+                    <div class='fund-amount {fund_class}'>{'+' if sector.get('main_net', 0) > 0 else ''}{sector.get('main_net', 0):.1f}亿</div>
+                </div>
+                """, unsafe_allow_html=True)
     
     # ========== 快讯 ==========
     jin10 = fetch_jin10_flash()
@@ -1077,7 +953,7 @@ if st.session_state.current_tab == "ai":
                 </div>
                 """, unsafe_allow_html=True)
 
-elif st.session_state.current_tab == "global":
+else:
     # 全球行情页面
     st.markdown("""
     <div class='main-title'>全球行情</div>
@@ -1093,16 +969,16 @@ elif st.session_state.current_tab == "global":
     
     # 全球股指
     st.markdown("<div class='section-header'>🌍 全球股指</div>", unsafe_allow_html=True)
-    cols = st.columns(4)
-    for i, idx in enumerate(indices[:12]):
-        with cols[i % 4]:
-            change_class = "up" if idx["change_pct"] > 0 else ("down" if idx["change_pct"] < 0 else "neutral")
+    cols = st.columns(5)
+    for i, idx in enumerate(indices[:10]):
+        with cols[i % 5]:
+            change_class = "up" if idx.get("change_pct", 0) > 0 else ("down" if idx.get("change_pct", 0) < 0 else "neutral")
             st.markdown(f"""
             <div class='index-card'>
-                <div class='index-region'>{idx['region']}</div>
-                <div class='index-name'>{idx['name']}</div>
-                <div class='index-price'>{idx['price']:,.2f}</div>
-                <div class='index-change {change_class}'>{'+' if idx['change_pct'] > 0 else ''}{idx['change_pct']:.2f}%</div>
+                <div class='index-region'>{idx.get('region', '')}</div>
+                <div class='index-name'>{idx.get('name', '')}</div>
+                <div class='index-price'>{idx.get('price', 0):,.2f}</div>
+                <div class='index-change {change_class}'>{'+' if idx.get('change_pct', 0) > 0 else ''}{idx.get('change_pct', 0):.2f}%</div>
             </div>
             """, unsafe_allow_html=True)
     
@@ -1111,12 +987,12 @@ elif st.session_state.current_tab == "global":
     fut_cols = st.columns(6)
     for i, fut in enumerate(futures[:6]):
         with fut_cols[i]:
-            change_class = "up" if fut["change_pct"] > 0 else "down"
+            change_class = "up" if fut.get("change_pct", 0) > 0 else "down"
             st.markdown(f"""
             <div class='futures-card'>
-                <div class='futures-name'>{fut['name']}</div>
-                <div class='futures-price'>{fut['price']:,.2f}</div>
-                <div class='futures-change {change_class}'>{'+' if fut['change_pct'] > 0 else ''}{fut['change_pct']:.2f}%</div>
+                <div class='futures-name'>{fut.get('name', '')}</div>
+                <div class='futures-price'>{fut.get('price', 0):,.2f}</div>
+                <div class='futures-change {change_class}'>{'+' if fut.get('change_pct', 0) > 0 else ''}{fut.get('change_pct', 0):.2f}%</div>
             </div>
             """, unsafe_allow_html=True)
     
@@ -1143,25 +1019,31 @@ elif st.session_state.current_tab == "global":
     
     with intl_cols[0]:
         st.markdown("<div class='news-section-title'>🔥 Reddit</div>", unsafe_allow_html=True)
-        for post in reddit[:6]:
-            st.markdown(f"""
-            <div class='intl-card'>
-                <div class='intl-title'>{post['title']}</div>
-                <div class='intl-meta'><span class='tag tag-reddit'>{post['subreddit']}</span></div>
-                <div class='intl-stats'>👍 {post['score']:,} · 💬 {post['comments']:,}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        if reddit:
+            for post in reddit[:6]:
+                st.markdown(f"""
+                <div class='intl-card'>
+                    <div class='intl-title'>{post.get('title', '')}</div>
+                    <div class='intl-meta'><span class='tag tag-reddit'>{post.get('subreddit', '')}</span></div>
+                    <div class='intl-stats'>👍 {post.get('score', 0):,} · 💬 {post.get('comments', 0):,}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='color: #86868b; padding: 20px;'>暂无数据</div>", unsafe_allow_html=True)
     
     with intl_cols[1]:
         st.markdown("<div class='news-section-title'>🧡 Hacker News</div>", unsafe_allow_html=True)
-        for post in hn[:6]:
-            st.markdown(f"""
-            <div class='intl-card'>
-                <div class='intl-title'>{post['title']}</div>
-                <div class='intl-meta'><span class='tag tag-hn'>HN</span></div>
-                <div class='intl-stats'>👍 {post['score']:,} · 💬 {post['comments']:,}</div>
-            </div>
-            """, unsafe_allow_html=True)
+        if hn:
+            for post in hn[:6]:
+                st.markdown(f"""
+                <div class='intl-card'>
+                    <div class='intl-title'>{post.get('title', '')}</div>
+                    <div class='intl-meta'><span class='tag tag-hn'>HN</span></div>
+                    <div class='intl-stats'>👍 {post.get('score', 0):,} · 💬 {post.get('comments', 0):,}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='color: #86868b; padding: 20px;'>暂无数据</div>", unsafe_allow_html=True)
     
     st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     
@@ -1174,7 +1056,7 @@ elif st.session_state.current_tab == "global":
         with col:
             st.markdown(f"<div class='news-section-title'>{cat_name}</div>", unsafe_allow_html=True)
             for i, item in enumerate(news.get(cat_key, [])[:8], 1):
-                title = item['title'][:35] + '...' if len(item['title']) > 35 else item['title']
+                title = item.get('title', '')[:35] + '...' if len(item.get('title', '')) > 35 else item.get('title', '')
                 st.markdown(f"""
                 <div class='news-card'>
                     <div class='news-number'>{i:02d}</div>
@@ -1183,20 +1065,11 @@ elif st.session_state.current_tab == "global":
                 </div>
                 """, unsafe_allow_html=True)
 
-else:
-    # 自选监控页面
-    st.markdown("""
-    <div class='main-title'>自选监控</div>
-    <div class='sub-title'>实时跟踪您关注的股票</div>
-    """, unsafe_allow_html=True)
-    
-    st.info("🔧 自选监控功能开发中，敬请期待...")
-
 # Footer
 st.markdown(f"""
 <div class='footer-info'>
     数据更新: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>
-    数据来源: 东方财富 / 新浪财经 / 金十数据 / Reddit / Hacker News<br>
+    数据来源: 东方财富 / 金十数据 / Reddit / Hacker News<br>
     ⚠️ 本工具仅供参考，不构成投资建议
 </div>
 """, unsafe_allow_html=True)
